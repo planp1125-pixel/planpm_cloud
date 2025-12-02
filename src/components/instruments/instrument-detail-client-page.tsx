@@ -21,7 +21,7 @@ function DetailItem({ icon: Icon, label, value }: { icon: React.ElementType, lab
                 <Icon className="w-5 h-5 text-muted-foreground" />
             </div>
             <div>
-                <p className="text-sm text-muted-foreground">{label}</p>
+                <div className="text-sm text-muted-foreground">{label}</div>
                 <div className="font-medium">{value}</div>
             </div>
         </div>
@@ -105,7 +105,7 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
                                 {image ? (
                                     <Image
                                         src={image.imageUrl}
-                                        alt={instrument.eqpId}
+                                        alt={image.description}
                                         width={600}
                                         height={400}
                                         className="object-cover w-full h-full"
