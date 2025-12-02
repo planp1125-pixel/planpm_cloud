@@ -35,7 +35,10 @@ const formatDate = (timestamp: Timestamp | undefined) => {
 };
 
 
-export const columns = (onEdit: (instrument: Instrument) => void): ColumnDef<Instrument>[] => [
+export const columns = (
+  onEdit: (instrument: Instrument) => void,
+  onDelete: (instrument: Instrument) => void
+): ColumnDef<Instrument>[] => [
   {
     accessorKey: 'eqpId',
     header: ({ column }) => {
@@ -132,6 +135,9 @@ export const columns = (onEdit: (instrument: Instrument) => void): ColumnDef<Ins
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => onEdit(instrument)}>
                 Edit Instrument
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDelete(instrument)} className="text-destructive">
+                Delete Instrument
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <Link href={`/instruments/${instrument.id}`} passHref>

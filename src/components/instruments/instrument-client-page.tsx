@@ -2,14 +2,13 @@
 
 import { useState } from 'react';
 import {
-  ColumnDef,
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
-  SortingState,
-  ColumnFiltersState,
+  type SortingState,
+  type ColumnFiltersState,
   getFilteredRowModel,
 } from '@tanstack/react-table';
 
@@ -23,19 +22,23 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Instrument } from '@/lib/types';
+import type { Instrument } from '@/lib/types';
 import { columns as createColumns } from './columns';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddInstrumentDialog } from './add-instrument-dialog';
 import { EditInstrumentDialog } from './edit-instrument-dialog';
+import { DeleteConfirmationDialog } from './delete-confirmation-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 export function InstrumentClientPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [isAddDialogOpen, setAddDialogOpen] = useState(false);
   const [editingInstrument, setEditingInstrument] = useState<Instrument | null>(null);
+  const [deletingInstrument, setDeletingInstrument] = useState<Instrument | null>(null);
+  const { toast } = useToast();
 
   const firestore = useFirestore();
 
@@ -50,7 +53,25 @@ export function InstrumentClientPage() {
     setEditingInstrument(instrument);
   };
   
-  const columns = createColumns(handleEdit);
+  const handleDelete = (instrument: Instrument) => {
+    setDeletingInstrument(instrument);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingInstrument || !firestore) return;
+    
+    const instrumentDocRef = doc(firestore, 'instruments', deletingInstrument.id);
+    deleteDocumentNonBlocking(instrumentDocRef);
+
+    toast({
+      title: 'Instrument Deleted',
+      description: `${deletingInstrument.eqpId} has been removed from the inventory.`,
+      variant: 'destructive',
+    });
+    setDeletingInstrument(null);
+  };
+
+  const columns = createColumns(handleEdit, handleDelete);
 
   const table = useReactTable({
     data: instruments || [],
@@ -99,7 +120,7 @@ export function InstrumentClientPage() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {columns.map((col, j) => (
+                  {columns.map((_, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-8 w-full" />
                     </TableCell>
@@ -154,6 +175,18 @@ export function InstrumentClientPage() {
             }
           }} 
           instrument={editingInstrument}
+        />
+      )}
+      {deletingInstrument && (
+        <DeleteConfirmationDialog
+          isOpen={!!deletingInstrument}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setDeletingInstrument(null);
+            }
+          }}
+          onConfirm={confirmDelete}
+          instrumentName={deletingInstrument.eqpId}
         />
       )}
     </div>
