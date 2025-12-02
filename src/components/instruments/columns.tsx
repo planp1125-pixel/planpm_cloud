@@ -27,7 +27,7 @@ const statusVariant: { [key: string]: 'default' | 'secondary' | 'destructive' | 
 };
 
 // Helper to format Timestamp to string
-const formatDate = (timestamp: Timestamp) => {
+const formatDate = (timestamp: Timestamp | undefined) => {
   if (!timestamp || typeof timestamp.toDate !== 'function') {
     return 'N/A';
   }
@@ -55,7 +55,7 @@ export const columns: ColumnDef<Instrument>[] = [
             {image ? (
               <Image
                 src={image.imageUrl}
-                alt={instrument.eqpId}
+                alt={instrument.eqpId || 'Instrument image'}
                 width={64}
                 height={48}
                 className="object-cover w-full h-full"
@@ -148,5 +148,3 @@ export const columns: ColumnDef<Instrument>[] = [
     },
   },
 ];
-
-    
