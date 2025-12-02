@@ -50,8 +50,10 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
         return PlaceHolderImages.find(img => img.id === instrument.imageId);
     }, [instrument]);
 
-    const nextMaintenanceDate = instrument?.nextMaintenanceDate.toDate();
+    const nextMaintenanceDate = instrument?.nextMaintenanceDate?.toDate();
     const isOverdue = nextMaintenanceDate && isAfter(new Date(), nextMaintenanceDate);
+    const scheduleDate = instrument?.scheduleDate?.toDate();
+
 
     if (isLoadingInstrument) {
         return (
@@ -130,7 +132,7 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
                              <DetailItem icon={Tag} label="Status" value={<Badge variant={instrument.status === 'Out of Service' ? 'destructive' : 'default'}>{instrument.status}</Badge>} />
                              <DetailItem icon={HardDrive} label="Model / Serial" value={`${instrument.model} / ${instrument.serialNumber}`} />
                              <DetailItem icon={Wrench} label="Maintenance Frequency" value={instrument.frequency} />
-                             <DetailItem icon={CalendarDays} label="Schedule Start Date" value={instrument.scheduleDate.toDate().toLocaleDateString()} />
+                             <DetailItem icon={CalendarDays} label="Schedule Start Date" value={scheduleDate ? scheduleDate.toLocaleDateString() : 'Not set'} />
                         </CardContent>
                     </Card>
                 </div>
