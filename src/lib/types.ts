@@ -28,6 +28,7 @@ export type Instrument = {
   frequency: MaintenanceFrequency;
   nextMaintenanceDate: Timestamp;
   imageId: string;
+  imageUrl?: string; // Optional user-provided image URL
 };
 
     

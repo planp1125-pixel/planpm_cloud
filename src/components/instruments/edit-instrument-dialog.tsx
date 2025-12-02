@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Loader2, FlaskConical } from 'lucide-react';
+import { CalendarIcon, Loader2, FlaskConical, Link } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addWeeks, addMonths, addYears } from 'date-fns';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
@@ -44,6 +44,7 @@ const formSchema = z.object({
     required_error: 'Schedule date is required.',
   }),
   frequency: z.string().min(1, 'Frequency is required.'),
+  imageUrl: z.string().url().optional().or(z.literal('')),
 });
 
 type EditInstrumentFormValues = z.infer<typeof formSchema>;
@@ -97,16 +98,22 @@ export function EditInstrumentDialog({ isOpen, onOpenChange, instrument }: EditI
       form.reset({
         ...instrument,
         scheduleDate: instrument.scheduleDate ? instrument.scheduleDate.toDate() : new Date(),
+        imageUrl: instrument.imageUrl || '',
       });
     }
   }, [instrument, form]);
 
   const selectedInstrumentType = form.watch('instrumentType');
+  const imageUrl = form.watch('imageUrl');
+
   const previewImage = useMemo(() => {
+    if (imageUrl) {
+        return { imageUrl, description: 'Custom Image', imageHint: '' };
+    }
     if (!selectedInstrumentType) return null;
     const imageId = instrumentTypeToImageId[selectedInstrumentType] || instrumentTypeToImageId.default;
     return PlaceHolderImages.find(img => img.id === imageId) || null;
-  }, [selectedInstrumentType]);
+  }, [selectedInstrumentType, imageUrl]);
 
   const onSubmit = (values: EditInstrumentFormValues) => {
     if (!firestore) return;
@@ -123,6 +130,7 @@ export function EditInstrumentDialog({ isOpen, onOpenChange, instrument }: EditI
       scheduleDate: Timestamp.fromDate(values.scheduleDate),
       nextMaintenanceDate: Timestamp.fromDate(nextMaintenanceDate),
       imageId: imageId,
+      imageUrl: values.imageUrl || '',
     };
     
     if (!instrumentTypes.find(t => t.value.toLowerCase() === values.instrumentType.toLowerCase())) {
@@ -297,29 +305,48 @@ export function EditInstrumentDialog({ isOpen, onOpenChange, instrument }: EditI
               />
             </div>
             
-            {/* Image Preview Column */}
-            <div className="flex flex-col items-center justify-center space-y-4 p-4 border rounded-lg bg-muted/50 h-full">
-                <div className="w-full aspect-video rounded-md overflow-hidden bg-background">
-                    {previewImage ? (
-                        <Image
-                            src={previewImage.imageUrl}
-                            alt={previewImage.description}
-                            width={400}
-                            height={300}
-                            className="object-cover w-full h-full"
-                            data-ai-hint={previewImage.imageHint}
-                        />
-                    ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
-                            <FlaskConical className="h-16 w-16 mb-2" />
-                            <p>Image preview will appear here</p>
-                        </div>
+            {/* Image Preview and URL Column */}
+            <div className="space-y-4">
+                <div className="flex flex-col items-center justify-center space-y-4 p-4 border rounded-lg bg-muted/50 h-fit">
+                    <div className="w-full aspect-video rounded-md overflow-hidden bg-background">
+                        {previewImage?.imageUrl ? (
+                            <Image
+                                src={previewImage.imageUrl}
+                                alt={previewImage.description}
+                                width={400}
+                                height={300}
+                                className="object-cover w-full h-full"
+                                data-ai-hint={previewImage.imageHint}
+                                unoptimized={!!imageUrl} // Don't optimize user-provided URLs
+                            />
+                        ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
+                                <FlaskConical className="h-16 w-16 mb-2" />
+                                <p>Image preview will appear here</p>
+                            </div>
+                        )}
+                    </div>
+                    <div className="text-center">
+                        <p className="font-semibold text-foreground">{imageUrl ? 'Custom Image' : selectedInstrumentType || 'Instrument Type'}</p>
+                        <p className="text-sm text-muted-foreground">{imageUrl ? 'Preview from URL' : 'Image associated with the selected type'}</p>
+                    </div>
+                </div>
+                 <FormField
+                    control={form.control}
+                    name="imageUrl"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Custom Image URL (Optional)</FormLabel>
+                        <FormControl>
+                            <div className="relative">
+                                <Link className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <Input placeholder="https://..." {...field} className="pl-10" />
+                            </div>
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
                     )}
-                </div>
-                <div className="text-center">
-                    <p className="font-semibold text-foreground">{selectedInstrumentType || 'Instrument Type'}</p>
-                    <p className="text-sm text-muted-foreground">Image associated with the selected type</p>
-                </div>
+                />
             </div>
 
             {/* Footer buttons need to span both columns if using grid */}

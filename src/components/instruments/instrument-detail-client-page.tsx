@@ -45,9 +45,16 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
 
     const { data: maintenanceHistory, isLoading: isLoadingHistory } = useCollection<MaintenanceEvent>(maintenanceQuery);
 
-    const image = useMemoFirebase(() => {
+    const image = useMemo(() => {
         if (!instrument) return null;
-        return PlaceHolderImages.find(img => img.id === instrument.imageId);
+        const defaultImage = PlaceHolderImages.find(img => img.id === instrument.imageId);
+        const imageUrl = instrument.imageUrl || defaultImage?.imageUrl;
+        const imageHint = instrument.imageUrl ? '' : defaultImage?.imageHint;
+        return {
+            imageUrl,
+            description: defaultImage?.description || instrument.instrumentType,
+            imageHint
+        };
     }, [instrument]);
 
     const nextMaintenanceDate = instrument?.nextMaintenanceDate?.toDate();
@@ -102,7 +109,7 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
                     <Card>
                         <CardContent className="p-0">
                             <div className="aspect-video w-full overflow-hidden rounded-t-lg bg-muted">
-                                {image ? (
+                                {image?.imageUrl ? (
                                     <Image
                                         src={image.imageUrl}
                                         alt={image.description}
@@ -110,6 +117,7 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
                                         height={400}
                                         className="object-cover w-full h-full"
                                         data-ai-hint={image.imageHint}
+                                        unoptimized={!!instrument.imageUrl}
                                     />
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-muted-foreground">

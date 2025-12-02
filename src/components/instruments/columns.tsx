@@ -51,18 +51,22 @@ export const columns = (
     },
     cell: ({ row }) => {
       const instrument = row.original;
-      const image = PlaceHolderImages.find(img => img.id === instrument.imageId);
+      const defaultImage = PlaceHolderImages.find(img => img.id === instrument.imageId);
+      const imageUrl = instrument.imageUrl || defaultImage?.imageUrl;
+      const imageHint = instrument.imageUrl ? '' : defaultImage?.imageHint;
+      
       return (
         <div className="flex items-center gap-4">
           <div className="w-16 h-12 rounded-md overflow-hidden bg-muted">
-            {image ? (
+            {imageUrl ? (
               <Image
-                src={image.imageUrl}
+                src={imageUrl}
                 alt={instrument.eqpId || 'Instrument image'}
                 width={64}
                 height={48}
                 className="object-cover w-full h-full"
-                data-ai-hint={image.imageHint}
+                data-ai-hint={imageHint}
+                unoptimized={!!instrument.imageUrl}
               />
             ) : (
                <div className="w-16 h-12 bg-muted flex items-center justify-center text-xs text-muted-foreground">No Image</div>
