@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CalendarDays, FlaskConical, Tag, Wrench, ChevronRight, HardDrive } from 'lucide-react';
 import { format, isAfter } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import Link from 'next/link';
 
 function DetailItem({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value: React.ReactNode }) {
     return (
@@ -194,5 +195,3 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
         </div>
     );
 }
-
-    
