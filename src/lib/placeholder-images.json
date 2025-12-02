@@ -1,3 +1,40 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "centrifuge",
+      "description": "A laboratory centrifuge",
+      "imageUrl": "https://images.unsplash.com/photo-1715442354511-d98c5a3a7fe8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxsYWIlMjBjZW50cmlmdWdlfGVufDB8fHx8MTc2NDY3MTAyM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "lab centrifuge"
+    },
+    {
+      "id": "microscope",
+      "description": "A high-power microscope",
+      "imageUrl": "https://images.unsplash.com/photo-1742206594477-15139139c0df?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxsYWIlMjBtaWNyb3Njb3BlfGVufDB8fHx8MTc2NDYxNTUxNnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "lab microscope"
+    },
+    {
+      "id": "spectrometer",
+      "description": "A mass spectrometer",
+      "imageUrl": "https://images.unsplash.com/photo-1627704671340-0969d7dbac25?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxtYXNzJTIwc3BlY3Ryb21ldGVyfGVufDB8fHx8MTc2NDY3MTAyM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "mass spectrometer"
+    },
+    {
+      "id": "hplc-system",
+      "description": "A High-Performance Liquid Chromatography (HPLC) system",
+      "imageUrl": "https://picsum.photos/seed/104/600/400",
+      "imageHint": "hplc system"
+    },
+    {
+      "id": "pcr-machine",
+      "description": "A Polymerase Chain Reaction (PCR) machine",
+      "imageUrl": "https://images.unsplash.com/photo-1708618900217-a82bb87bffc2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxwY3IlMjBtYWNoaW5lfGVufDB8fHx8MTc2NDY3MTAyM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "pcr machine"
+    },
+    {
+      "id": "autoclave",
+      "description": "A sterilization autoclave",
+      "imageUrl": "https://images.unsplash.com/photo-1742997734865-71d10c491be5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxhdXRvY2xhdmV8ZW58MHx8fHwxNzY0NjAyOTk0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "autoclave"
+    }
+  ]
 }

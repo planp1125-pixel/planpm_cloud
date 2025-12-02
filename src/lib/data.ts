@@ -1,0 +1,101 @@
+import { add, sub, format } from 'date-fns';
+import type { Instrument } from './types';
+
+const now = new Date();
+
+export const mockInstruments: Instrument[] = [
+  {
+    id: 'INST-001',
+    name: 'Clinical Centrifuge',
+    model: 'Model-X100',
+    serialNumber: 'SN-A1B2C3D4',
+    location: 'Lab A, Room 101',
+    status: 'Operational',
+    lastMaintenanceDate: format(sub(now, { months: 3 }), 'yyyy-MM-dd'),
+    nextMaintenanceDate: format(add(now, { months: 3 }), 'yyyy-MM-dd'),
+    usagePatterns: 'High frequency, 8 hours/day, spinning biological samples.',
+    imageId: 'centrifuge',
+    maintenanceHistory: [
+      { id: 'MAINT-001-1', date: format(sub(now, { months: 9 }), 'yyyy-MM-dd'), type: 'Scheduled', description: 'Annual Service', completed: true, notes: 'Replaced rotor bearing. Calibrated speed.' },
+      { id: 'MAINT-001-2', date: format(sub(now, { months: 3 }), 'yyyy-MM-dd'), type: 'Scheduled', description: 'Bi-Annual Check', completed: true, notes: 'Cleaned and lubricated moving parts.' },
+    ],
+  },
+  {
+    id: 'INST-002',
+    name: 'Compound Microscope',
+    model: 'Olympus CX23',
+    serialNumber: 'SN-E5F6G7H8',
+    location: 'Lab B, Room 203',
+    status: 'Needs Maintenance',
+    lastMaintenanceDate: format(sub(now, { months: 11 }), 'yyyy-MM-dd'),
+    nextMaintenanceDate: format(add(now, { days: 14 }), 'yyyy-MM-dd'),
+    usagePatterns: 'Medium frequency, 4 hours/day, for cell culture analysis.',
+    imageId: 'microscope',
+    maintenanceHistory: [
+      { id: 'MAINT-002-1', date: format(sub(now, { months: 11 }), 'yyyy-MM-dd'), type: 'Scheduled', description: 'Annual Cleaning & Calibration', completed: true, notes: 'Cleaned lenses and calibrated focus mechanism.' },
+    ],
+  },
+  {
+    id: 'INST-003',
+    name: 'Mass Spectrometer',
+    model: 'Thermo Q-Exactive',
+    serialNumber: 'SN-I9J0K1L2',
+    location: 'Analytical Core',
+    status: 'Operational',
+    lastMaintenanceDate: format(sub(now, { weeks: 2 }), 'yyyy-MM-dd'),
+    nextMaintenanceDate: format(add(now, { months: 5, weeks: 2 }), 'yyyy-MM-dd'),
+    usagePatterns: 'Low frequency, project-based usage, high intensity during runs.',
+    imageId: 'spectrometer',
+    maintenanceHistory: [
+      { id: 'MAINT-003-1', date: format(sub(now, { months: 6 }), 'yyyy-MM-dd'), type: 'Scheduled', description: 'Source Cleaning', completed: true, notes: 'Ion source cleaned as per manufacturer instructions.' },
+      { id: 'MAINT-003-2', date: format(sub(now, { weeks: 2 }), 'yyyy-MM-dd'), type: 'Unscheduled', description: 'Vacuum Pump Repair', completed: true, notes: 'Replaced faulty seal on turbo pump.' },
+    ],
+  },
+  {
+    id: 'INST-004',
+    name: 'HPLC System',
+    model: 'Agilent 1260 Infinity II',
+    serialNumber: 'SN-M3N4O5P6',
+    location: 'Pharma QC Lab',
+    status: 'Out of Service',
+    lastMaintenanceDate: format(sub(now, { months: 2 }), 'yyyy-MM-dd'),
+    nextMaintenanceDate: format(sub(now, { days: 5 }), 'yyyy-MM-dd'),
+    usagePatterns: 'Constant use, 24/7 automated runs for quality control assays.',
+    imageId: 'hplc-system',
+    maintenanceHistory: [
+       { id: 'MAINT-004-1', date: format(sub(now, { months: 2 }), 'yyyy-MM-dd'), type: 'Scheduled', description: 'Quarterly PM', completed: true, notes: 'Replaced pump seals and check valves.' },
+       { id: 'MAINT-004-2', date: format(sub(now, { days: 7 }), 'yyyy-MM-dd'), type: 'Emergency', description: 'Column Pressure Error', completed: false, notes: 'System shut down due to overpressure. Awaiting service engineer.' },
+    ],
+  },
+  {
+    id: 'INST-005',
+    name: 'Real-Time PCR',
+    model: 'Bio-Rad CFX96',
+    serialNumber: 'SN-Q7R8S9T0',
+    location: 'Genomics Lab',
+    status: 'Operational',
+    lastMaintenanceDate: format(sub(now, { months: 5 }), 'yyyy-MM-dd'),
+    nextMaintenanceDate: format(add(now, { days: 25 }), 'yyyy-MM-dd'),
+    usagePatterns: 'High throughput, multiple runs per day.',
+    imageId: 'pcr-machine',
+    maintenanceHistory: [
+      { id: 'MAINT-005-1', date: format(sub(now, { months: 5 }), 'yyyy-MM-dd'), type: 'Scheduled', description: '6-Month Service', completed: true, notes: 'Optical block calibration and filter check.' },
+    ],
+  },
+  {
+    id: 'INST-006',
+    name: 'Autoclave',
+    model: 'Tuttnauer 3870EA',
+    serialNumber: 'SN-U1V2W3X4',
+    location: 'Sterilization Room',
+    status: 'Needs Maintenance',
+    lastMaintenanceDate: format(sub(now, { months: 1 }), 'yyyy-MM-dd'),
+    nextMaintenanceDate: format(sub(now, { days: 1 }), 'yyyy-MM-dd'),
+    usagePatterns: 'Daily use, multiple cycles for sterilizing glassware and media.',
+    imageId: 'autoclave',
+    maintenanceHistory: [
+      { id: 'MAINT-006-1', date: format(sub(now, { months: 7 }), 'yyyy-MM-dd'), type: 'Scheduled', description: 'Annual Safety Certification', completed: true, notes: 'Passed pressure and temperature tests.' },
+       { id: 'MAINT-006-2', date: format(sub(now, { months: 1 }), 'yyyy-MM-dd'), type: 'Unscheduled', description: 'Door Gasket Replacement', completed: true, notes: 'Replaced worn out door gasket.' },
+    ],
+  },
+];
