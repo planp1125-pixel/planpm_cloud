@@ -1,14 +1,12 @@
-'use client';
-
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, addWeeks, addMonths, addYears } from 'date-fns';
 import { supabase } from '@/lib/supabase';
-import type { MaintenanceEvent, Instrument } from '@/lib/types';
+import type { MaintenanceEvent, Instrument, MaintenanceConfiguration, MaintenanceFrequency } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
 import { UpdateMaintenanceDialog } from '../maintenance/update-maintenance-dialog';
 import { ViewMaintenanceResultDialog } from '../maintenance/view-maintenance-result-dialog';
@@ -35,6 +33,17 @@ interface EnhancedEvent extends MaintenanceEvent {
 
 import { useAuth } from '@/contexts/auth-context';
 
+const getNextDate = (date: Date, frequency: MaintenanceFrequency): Date => {
+  switch (frequency) {
+    case 'Weekly': return addWeeks(date, 1);
+    case 'Monthly': return addMonths(date, 1);
+    case '3 Months': return addMonths(date, 3);
+    case '6 Months': return addMonths(date, 6);
+    case '1 Year': return addYears(date, 1);
+    default: return date;
+  }
+};
+
 export function UpcomingMaintenanceList() {
   const { user } = useAuth();
   const [upcomingSchedules, setUpcomingSchedules] = useState<EnhancedEvent[]>([]);
@@ -52,124 +61,118 @@ export function UpcomingMaintenanceList() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
   const fetchUpcoming = async () => {
-    const now = new Date();
+    setIsLoading(true);
     const days = parseInt(timeRange);
-    const futureDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    const futureDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
-    // Fetch existing schedules (including completed ones for status display)
-    const { data: schedules } = await supabase
-      .from('maintenanceSchedules')
-      .select('*')
-      .gte('dueDate', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Include last 7 days
-      .lte('dueDate', futureDate);
+    try {
+      // 1. Fetch Instruments
+      const { data: instruments } = await supabase.from('instruments').select('*');
+      const instMap: Record<string, Instrument> = {};
+      instruments?.forEach(i => instMap[i.id] = i);
+      setInstrumentsMap(instMap);
 
-    // Fetch maintenance results to check completion status
-    const { data: results } = await supabase
-      .from('maintenanceResults')
-      .select('*');
+      // 2. Fetch Maintenance Configurations
+      const { data: configs } = await supabase.from('maintenance_configurations').select('*');
 
-    // Fetch instruments due soon
-    const { data: instrumentsDue } = await supabase
-      .from('instruments')
-      .select('*')
-      .gte('nextMaintenanceDate', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-      .lte('nextMaintenanceDate', futureDate);
+      // 3. Fetch Active/History Schedules
+      const { data: schedules } = await supabase.from('maintenanceSchedules').select('*');
 
-    let allInstruments = instrumentsDue || [];
+      // 4. Fetch Results (for status calculation)
+      const { data: results } = await supabase.from('maintenanceResults').select('*');
 
-    if (schedules && schedules.length > 0) {
-      const scheduleInstrumentIds = schedules.map(s => s.instrumentId);
-      const missingIds = scheduleInstrumentIds.filter(id => !allInstruments.find(i => i.id === id));
+      const combinedEvents: EnhancedEvent[] = [];
 
-      if (missingIds.length > 0) {
-        const { data: extraInstruments } = await supabase
-          .from('instruments')
-          .select('*')
-          .in('id', missingIds);
-        if (extraInstruments) {
-          allInstruments = [...allInstruments, ...extraInstruments];
+      // Helper to determine status (same as before)
+      const getMaintenanceStatus = (scheduleId: string, dueDate: string): { status: MaintenanceStatus; totalSections: number; completedSections: number } => {
+        const result = results?.find(r => r.maintenanceScheduleId === scheduleId);
+        if (!result) {
+          const isPastDue = new Date(dueDate) < new Date();
+          return { status: isPastDue ? 'Overdue' : 'Pending', totalSections: 0, completedSections: 0 };
         }
-      }
-    }
-
-    // Create map
-    const instMap: Record<string, Instrument> = {};
-    allInstruments.forEach(i => instMap[i.id] = i);
-    setInstrumentsMap(instMap);
-
-    // Helper to determine status
-    const getMaintenanceStatus = (scheduleId: string, dueDate: string): { status: MaintenanceStatus; totalSections: number; completedSections: number } => {
-      const result = results?.find(r => r.maintenanceScheduleId === scheduleId);
-
-      if (!result) {
-        const isPastDue = new Date(dueDate) < new Date();
-        return {
-          status: isPastDue ? 'Overdue' : 'Pending',
-          totalSections: 0,
-          completedSections: 0
-        };
-      }
-
-      // Check testData for partial completion
-      const testData = result.testData as any[] | null;
-      if (testData && Array.isArray(testData)) {
-        const totalSections = testData.length;
-        const completedSections = testData.filter(section =>
-          section.rows?.every((row: any) => row.measured !== undefined)
-        ).length;
-
-        if (completedSections === 0) {
-          return { status: 'Pending', totalSections, completedSections };
-        } else if (completedSections < totalSections) {
-          return { status: 'Partially Completed', totalSections, completedSections };
+        const testData = result.testData as any[] | null;
+        if (testData && Array.isArray(testData)) {
+          const totalSections = testData.length;
+          const completedSections = testData.filter(section =>
+            section.rows?.every((row: any) => row.measured !== undefined)
+          ).length;
+          if (completedSections === 0) return { status: 'Pending', totalSections, completedSections };
+          else if (completedSections < totalSections) return { status: 'Partially Completed', totalSections, completedSections };
         }
-      }
+        return { status: 'Completed', totalSections: 0, completedSections: 0 };
+      };
 
-      return { status: 'Completed', totalSections: 0, completedSections: 0 };
-    };
+      // Process each configuration
+      if (configs && instruments) {
+        configs.forEach((config: MaintenanceConfiguration) => {
+          // Find any EXISTING open schedule for this config (approx match on type/instrument)
+          // Ideally maintenanceSchedules should have config_id, but current schema might not.
+          // We match by instrumentId and type.
+          const existingSchedules = schedules?.filter(s =>
+            s.instrumentId === config.instrument_id &&
+            s.type === config.maintenance_type
+          ) || [];
 
-    // Merge and enhance
-    const combined: EnhancedEvent[] = [];
+          // Sort by date desc
+          existingSchedules.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
 
-    // Add existing schedules
-    if (schedules) {
-      schedules.forEach(schedule => {
-        const { status, totalSections, completedSections } = getMaintenanceStatus(schedule.id, schedule.dueDate);
-        combined.push({
-          ...schedule,
-          maintenanceStatus: status,
-          totalSections,
-          completedSections
+          // Check if the latest one is open (Scheduled/In Progress/Overdue)
+          const openSchedule = existingSchedules.find(s => s.status !== 'Completed');
+
+          if (openSchedule) {
+            // Use the real schedule
+            const { status, totalSections, completedSections } = getMaintenanceStatus(openSchedule.id, openSchedule.dueDate);
+            combinedEvents.push({
+              ...openSchedule,
+              maintenanceStatus: status,
+              totalSections,
+              completedSections,
+              templateId: config.template_id // Ensure template ID is passed
+            });
+          } else {
+            // No open schedule, calculate NEXT due date
+            const lastCompleted = existingSchedules.find(s => s.status === 'Completed');
+            let nextDue = new Date(config.schedule_date); // Start from base schedule date
+
+            if (lastCompleted && lastCompleted.completedDate) {
+              // Calculate next from completion
+              nextDue = getNextDate(new Date(lastCompleted.completedDate), config.frequency);
+            } else if (openSchedule) {
+              // Should be covered above, but just in case
+            } else if (new Date(config.schedule_date) < new Date() && !lastCompleted) {
+              // Never done, start date passed -> It is the due date (Overdue)
+              nextDue = new Date(config.schedule_date);
+            } else {
+              // If configured start date is in future, wait for it.
+              // If configured start date is way in past but no record, loop until future? 
+              // For simplicity, let's assume if no record, the schedule_date IS the next due, even if old.
+              nextDue = new Date(config.schedule_date);
+            }
+
+            // Only add if within range
+            if (nextDue <= futureDate) {
+              const isPastDue = nextDue < new Date();
+              combinedEvents.push({
+                id: `virtual-${config.id}-${nextDue.getTime()}`, // unique ID
+                instrumentId: config.instrument_id,
+                dueDate: nextDue.toISOString(),
+                type: config.maintenance_type as any, // Cast to match type
+                description: `Scheduled ${config.maintenance_type}`,
+                status: 'Scheduled',
+                maintenanceStatus: isPastDue ? 'Overdue' : 'Pending',
+                templateId: config.template_id
+              });
+            }
+          }
         });
-      });
+      }
+
+      setUpcomingSchedules(combinedEvents);
+    } catch (err) {
+      console.error("Error fetching schedules:", err);
+    } finally {
+      setIsLoading(false);
     }
-
-    // Add instruments that don't have a schedule yet
-    if (instrumentsDue) {
-      instrumentsDue.forEach(inst => {
-        const hasSchedule = schedules?.some(s => s.instrumentId === inst.id);
-
-        if (!hasSchedule) {
-          let type: 'Preventative Maintenance' | 'AMC' = 'Preventative Maintenance';
-          if (inst.status === 'AMC') type = 'AMC';
-
-          const isPastDue = new Date(inst.nextMaintenanceDate) < new Date();
-
-          combined.push({
-            id: `virtual-${inst.id}`,
-            instrumentId: inst.id,
-            dueDate: inst.nextMaintenanceDate,
-            type: type,
-            description: `Scheduled Maintenance`,
-            status: 'Scheduled',
-            maintenanceStatus: isPastDue ? 'Overdue' : 'Pending',
-          });
-        }
-      });
-    }
-
-    setUpcomingSchedules(combined);
-    setIsLoading(false);
   };
 
   useEffect(() => {

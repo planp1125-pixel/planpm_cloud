@@ -90,24 +90,11 @@ export function UpdateMaintenanceDialog({
     });
 
     // Fetch templates on mount
-    useEffect(() => {
-        const fetchTemplates = async () => {
-            const { data } = await supabase
-                .from('testTemplates')
-                .select('*')
-                .order('name');
-            if (data) setTemplates(data);
-        };
-        if (isOpen) {
-            fetchTemplates();
-            // Reset state when dialog opens
-            setSavedSections(new Set());
-            setSectionDocuments({});
-        }
-    }, [isOpen]);
+    // Fetch templates on mount removed (consolidated in the next useEffect)
+
 
     // Load template structure when selected
-    const handleTemplateSelect = (templateId: string) => {
+    const handleTemplateSelect = (templateId: string, availableTemplates: TestTemplate[] = templates) => {
         setSelectedTemplateId(templateId);
         setSavedSections(new Set());
         setSectionDocuments({});
@@ -117,7 +104,7 @@ export function UpdateMaintenanceDialog({
             return;
         }
 
-        const template = templates.find(t => t.id === templateId);
+        const template = availableTemplates.find(t => t.id === templateId);
         if (template) {
             const clonedStructure = JSON.parse(JSON.stringify(template.structure)) as TestSection[];
             clonedStructure.forEach(section => {
@@ -130,6 +117,36 @@ export function UpdateMaintenanceDialog({
             setTestData(clonedStructure);
         }
     };
+
+    // Fetch templates on mount and handle initial selection
+    useEffect(() => {
+        const fetchTemplatesAndInit = async () => { // Renamed for clarity
+            const { data } = await supabase
+                .from('testTemplates')
+                .select('*')
+                .order('name');
+
+            if (data) {
+                setTemplates(data);
+
+                // Pre-select template if event has one
+                if (isOpen && maintenanceEvent.templateId) {
+                    handleTemplateSelect(maintenanceEvent.templateId, data);
+                }
+            }
+        };
+
+        if (isOpen) {
+            fetchTemplatesAndInit();
+            // Reset state when dialog opens
+            setSavedSections(new Set());
+            setSectionDocuments({});
+            if (!maintenanceEvent.templateId) { // Reset if no template linked
+                setSelectedTemplateId('');
+                setTestData([]);
+            }
+        }
+    }, [isOpen, maintenanceEvent]); // Added maintenanceEvent dependency
 
     // Update measured value and calculate error/passed
     const handleMeasuredChange = (sectionIndex: number, rowIndex: number, value: string) => {

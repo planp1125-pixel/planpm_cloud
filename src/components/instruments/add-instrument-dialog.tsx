@@ -87,6 +87,43 @@ const instrumentTypeToImageId: Record<string, string> = {
   'default': 'centrifuge'
 };
 
+interface DatePickerProps {
+  value: Date;
+  onChange: (date: Date | undefined) => void;
+}
+
+const DatePicker = ({ value, onChange }: DatePickerProps) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <FormControl>
+          <Button
+            variant={'outline'}
+            className={cn('pl-3 text-left font-normal', !value && 'text-muted-foreground')}
+          >
+            {value ? format(value, 'PPP') : <span>Pick a date</span>}
+            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+          </Button>
+        </FormControl>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={value}
+          onSelect={(date) => {
+            onChange(date);
+            setOpen(false);
+          }}
+          disabled={(date) => date < new Date('1900-01-01')}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 
 export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInstrumentDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -236,7 +273,7 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="max-w-7xl">
         <DialogHeader>
           <DialogTitle>Add New Instrument</DialogTitle>
           <DialogDescription>Fill in the details below to add a new instrument to the inventory.</DialogDescription>
@@ -402,28 +439,7 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
                         render={({ field }) => (
                           <FormItem className="flex flex-col">
                             <FormLabel>Schedule Start Date</FormLabel>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <FormControl>
-                                  <Button
-                                    variant={'outline'}
-                                    className={cn('pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
-                                  >
-                                    {field.value ? format(field.value, 'PPP') : <span>Pick a date</span>}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                  </Button>
-                                </FormControl>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={field.value}
-                                  onSelect={field.onChange}
-                                  disabled={(date) => date < new Date('1900-01-01')}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
+                            <DatePicker value={field.value} onChange={field.onChange} />
                             <FormMessage />
                           </FormItem>
                         )}
@@ -434,14 +450,17 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Template</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select
+                              onValueChange={(val) => field.onChange(val === "none" ? "" : val)}
+                              value={field.value || "none"}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select template" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="">None</SelectItem>
+                                <SelectItem value="none">None</SelectItem>
                                 {templates.map(t => (
                                   <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                                 ))}

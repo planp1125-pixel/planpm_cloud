@@ -16,6 +16,17 @@ export type MaintenanceEvent = {
   notes?: string;
   completedDate?: string;
   completionNotes?: string;
+  templateId?: string | null;
+};
+
+export type MaintenanceConfiguration = {
+  id: string;
+  instrument_id: string;
+  maintenance_type: string;
+  frequency: MaintenanceFrequency;
+  schedule_date: string;
+  template_id?: string | null;
+  user_id?: string;
 };
 
 export type MaintenanceResult = {
