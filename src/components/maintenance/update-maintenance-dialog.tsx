@@ -94,30 +94,25 @@ export function UpdateMaintenanceDialog({
 
 
     // Load template structure when selected
-    const handleTemplateSelect = (templateId: string, availableTemplates: TestTemplate[] = templates) => {
+    const handleTemplateSelect = (templateId: string, currentTemplates: TestTemplate[] = templates) => {
         setSelectedTemplateId(templateId);
-        setSavedSections(new Set());
-        setSectionDocuments({});
-
-        if (templateId === 'none') {
-            setTestData([]);
-            return;
-        }
-
-        const template = availableTemplates.find(t => t.id === templateId);
+        const template = currentTemplates.find(t => t.id === templateId);
         if (template) {
-            const clonedStructure = JSON.parse(JSON.stringify(template.structure)) as TestSection[];
-            clonedStructure.forEach(section => {
-                section.rows.forEach(row => {
-                    row.measured = undefined;
-                    row.error = undefined;
-                    row.passed = undefined;
-                });
-            });
-            setTestData(clonedStructure);
+            // Reset test data based on template structure
+            const initialData = template.structure.map(section => ({
+                ...section,
+                rows: section.rows.map(row => ({
+                    ...row,
+                    measured: undefined,
+                    error: undefined,
+                    passed: undefined
+                }))
+            }));
+            setTestData(initialData);
+        } else {
+            setTestData([]);
         }
     };
-
     // Fetch templates on mount and handle initial selection
     useEffect(() => {
         const fetchTemplatesAndInit = async () => { // Renamed for clarity

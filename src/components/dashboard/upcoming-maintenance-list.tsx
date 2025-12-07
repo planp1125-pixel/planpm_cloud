@@ -187,23 +187,30 @@ export function UpcomingMaintenanceList() {
 
   const handleUpdateClick = async (event: MaintenanceEvent) => {
     if (event.id.startsWith('virtual-')) {
-      const { data, error } = await supabase.from('maintenanceSchedules').insert({
+      const insertPayload = {
         instrumentId: event.instrumentId,
         dueDate: event.dueDate,
         type: event.type,
         description: event.description,
         status: 'Scheduled',
         user_id: user?.id,
-        templateId: event.templateId || null
-      }).select().single();
+        template_id: event.templateId || null
+      };
+
+      const { data, error } = await supabase.from('maintenanceSchedules').insert(insertPayload).select().single();
+
+      if (error) {
+        console.error('Error creating schedule:', error);
+        return;
+      }
 
       if (data) {
-        // Preserve templateId from the event (config) because DB insert might not return it 
-        // if the column is missing or named differently (e.g. template_id vs templateId)
-        setSelectedSchedule({
+        // Manually attach the templateId from the virtual event so the Dialog knows which one to load
+        const finalSchedule = {
           ...data,
-          templateId: event.templateId || data.templateId || data.template_id
-        });
+          templateId: event.templateId || data.templateId || data.template_id // Preserve from virtual source, or use from DB
+        };
+        setSelectedSchedule(finalSchedule);
         setSelectedInstrumentId(data.instrumentId);
       }
     } else {
