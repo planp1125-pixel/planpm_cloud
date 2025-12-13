@@ -6,14 +6,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { differenceInDays, addWeeks, addMonths, addYears, format } from 'date-fns';
+import { differenceInDays, addDays, addWeeks, addMonths, addYears } from 'date-fns';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
+import { formatDate } from '@/lib/date-utils';
 import type { MaintenanceEvent, Instrument, MaintenanceConfiguration, MaintenanceFrequency } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
+import { MobileMaintenanceCard } from './mobile-maintenance-card';
+import { ColumnFilterPopover } from './column-filter-popover';
 import { UpdateMaintenanceDialog } from '../maintenance/update-maintenance-dialog';
 import { ViewMaintenanceResultDialog } from '../maintenance/view-maintenance-result-dialog';
-import { CheckCircle, Clock, AlertCircle, CircleDot, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, CircleDot, Search, ArrowUpDown, ArrowUp, ArrowDown, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -27,21 +30,53 @@ type MaintenanceStatus = 'Completed' | 'Pending' | 'Partially Completed' | 'Over
 type SortField = 'instrument' | 'type' | 'location' | 'dueDate' | 'status' | 'daysLeft' | 'instrumentType';
 type SortOrder = 'asc' | 'desc';
 type TimeRange = '30' | '90' | '180' | '365';
+type StatusFilter = 'all' | 'pending' | 'overdue';
+type FrequencyFilter = 'all' | 'Daily' | 'Weekly' | 'Monthly' | '3 Months' | '6 Months' | '1 Year';
 
 interface EnhancedEvent extends MaintenanceEvent {
   maintenanceStatus: MaintenanceStatus;
   totalSections?: number;
   completedSections?: number;
+  hasResult?: boolean;
 }
 
 const getNextDate = (date: Date, frequency: MaintenanceFrequency): Date => {
   switch (frequency) {
+    case 'Daily': return addDays(date, 1);
     case 'Weekly': return addWeeks(date, 1);
     case 'Monthly': return addMonths(date, 1);
     case '3 Months': return addMonths(date, 3);
     case '6 Months': return addMonths(date, 6);
     case '1 Year': return addYears(date, 1);
     default: return date;
+  }
+};
+
+// Smart limits to prevent UI performance issues
+const getMaxOccurrences = (timeRange: TimeRange, frequency: MaintenanceFrequency): number => {
+  const days = parseInt(timeRange);
+
+  switch (frequency) {
+    case 'Daily':
+      // Daily schedules: max 30 occurrences regardless of time range
+      return Math.min(30, days);
+
+    case 'Weekly':
+      // Weekly schedules: show reasonable amount
+      if (days <= 90) return Math.ceil(days / 7); // ~13 weeks for 90 days
+      return 26; // Max ~6 months of weekly
+
+    case 'Monthly':
+      return Math.ceil(days / 30); // Natural monthly count
+
+    case '3 Months':
+    case '6 Months':
+    case '1 Year':
+      // Long-interval schedules: show all within range
+      return 50; // Safety limit
+
+    default:
+      return 50;
   }
 };
 
@@ -57,14 +92,35 @@ export function UpcomingMaintenanceList() {
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [timeRange, setTimeRange] = useState<TimeRange>('30');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
+  const [frequencyFilter, setFrequencyFilter] = useState<FrequencyFilter>('all');
   const [sortField, setSortField] = useState<SortField>('dueDate');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+  // Excel-like column filters
+  const [columnFilters, setColumnFilters] = useState<{
+    instrument: string[];
+    type: string[];
+    maintenanceBy: string[];
+    frequency: string[];
+    location: string[];
+    instrumentType: string[];
+  }>({
+    instrument: [],
+    type: [],
+    maintenanceBy: [],
+    frequency: [],
+    location: [],
+    instrumentType: [],
+  });
+
   const { user } = useAuth();
 
   const fetchUpcoming = async () => {
     setIsLoading(true);
     const days = parseInt(timeRange);
     const futureDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000); // show recent history within selected window
 
     try {
       // 1. Fetch Instruments
@@ -85,22 +141,50 @@ export function UpcomingMaintenanceList() {
       const combinedEvents: EnhancedEvent[] = [];
 
       // Helper to determine status (same as before)
-      const getMaintenanceStatus = (scheduleId: string, dueDate: string): { status: MaintenanceStatus; totalSections: number; completedSections: number } => {
-        const result = results?.find(r => r.maintenanceScheduleId === scheduleId);
+      const getMaintenanceStatus = (schedule: MaintenanceEvent): { status: MaintenanceStatus; totalSections: number; completedSections: number; hasResult: boolean } => {
+        const result = results?.find(r => r.maintenanceScheduleId === schedule.id);
         if (!result) {
-          const isPastDue = new Date(dueDate) < new Date();
-          return { status: isPastDue ? 'Overdue' : 'Pending', totalSections: 0, completedSections: 0 };
+          const isPastDue = new Date(schedule.dueDate) < new Date();
+          return { status: isPastDue ? 'Overdue' : 'Pending', totalSections: 0, completedSections: 0, hasResult: false };
         }
+
         const testData = result.testData as any[] | null;
-        if (testData && Array.isArray(testData)) {
+        if (testData && Array.isArray(testData) && testData.length > 0) {
           const totalSections = testData.length;
-          const completedSections = testData.filter(section =>
-            section.rows?.every((row: any) => row.measured !== undefined)
-          ).length;
-          if (completedSections === 0) return { status: 'Pending', totalSections, completedSections };
-          else if (completedSections < totalSections) return { status: 'Partially Completed', totalSections, completedSections };
+          const completedSections = testData.filter(section => {
+            // Check if section has rows and they are not empty
+            if (!section.rows || section.rows.length === 0) return true;
+
+            // Check if all rows in the section are complete
+            const allRowsComplete = section.rows.every((row: any) => {
+              if (section.type === 'checklist') {
+                return row.passed === true;
+              } else {
+                return row.measured !== undefined && row.measured !== null && row.measured !== '';
+              }
+            });
+
+            return allRowsComplete;
+          }).length;
+
+          console.log('DEBUG Status Calculation:', {
+            scheduleId: schedule.id,
+            totalSections,
+            completedSections,
+            scheduleStatus: schedule.status,
+            testData: JSON.stringify(testData, null, 2)
+          });
+
+          if (completedSections === 0) return { status: 'Pending', totalSections, completedSections, hasResult: true };
+          if (completedSections < totalSections) return { status: 'Partially Completed', totalSections, completedSections, hasResult: true };
+          return { status: 'Completed', totalSections, completedSections, hasResult: true };
         }
-        return { status: 'Completed', totalSections: 0, completedSections: 0 };
+
+        // Result exists but no test data: treat as partial unless schedule is marked completed
+        if (schedule.status === 'Completed') {
+          return { status: 'Completed', totalSections: 0, completedSections: 0, hasResult: true };
+        }
+        return { status: 'Partially Completed', totalSections: 0, completedSections: 0, hasResult: true };
       };
 
       if (configs && instruments) {
@@ -110,63 +194,124 @@ export function UpcomingMaintenanceList() {
           // Map any potential snake_case to camelCase for consistency
           const existingSchedules = schedules?.map(s => ({
             ...s,
-            templateId: s.templateId || s.template_id
+            templateId: s.templateId || (s as any).template_id,
+            maintenanceBy: (s as any).maintenanceBy || (s as any).maintenance_by,
+            vendorName: (s as any).vendorName || (s as any).vendor_name,
+            vendorContact: (s as any).vendorContact || (s as any).vendor_contact,
           })).filter(s =>
             s.instrumentId === config.instrument_id &&
             s.type === config.maintenance_type
           ) || [];
 
+          const existingDueDates = new Set<number>(existingSchedules.map(s => new Date(s.dueDate).getTime()));
+
           // Sort by date desc
           existingSchedules.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
 
-          // Check if the latest one is open (Scheduled/In Progress/Overdue)
-          const openSchedule = existingSchedules.find(s => s.status !== 'Completed');
+          // Get the most recent schedule (could be open or completed)
+          const latestSchedule = existingSchedules[0];
 
-          if (openSchedule) {
-            // Use the real schedule
-            const { status, totalSections, completedSections } = getMaintenanceStatus(openSchedule.id, openSchedule.dueDate);
-            const templateIdToUse = config.template_id || (config as any).templateId || openSchedule.templateId;
-            console.log(`DEBUG: Processing ${config.id}, OpenSchedule: ${openSchedule.id}, TemplateID: ${templateIdToUse}`); // DEBUG
+          if (latestSchedule) {
+            const templateIdToUse = config.template_id || (config as any).templateId || latestSchedule.templateId;
 
-            combinedEvents.push({
-              ...openSchedule,
-              maintenanceStatus: status,
-              totalSections,
-              completedSections,
-              templateId: templateIdToUse // Ensure template ID is passed
-            });
-          } else {
-            // No open schedule, calculate NEXT due date
-            const lastCompleted = existingSchedules.find(s => s.status === 'Completed');
-            let nextDue = new Date(config.schedule_date); // Start from base schedule date
+            // Add all real schedules in the selected window so completed history stays visible
+            existingSchedules.forEach(schedule => {
+              const dueTime = new Date(schedule.dueDate).getTime();
+              if (dueTime < startDate.getTime() || dueTime > futureDate.getTime()) return;
 
-            if (lastCompleted && lastCompleted.completedDate) {
-              // Calculate next from completion
-              nextDue = getNextDate(new Date(lastCompleted.completedDate), config.frequency);
-            } else if (openSchedule) {
-              // Should be covered above, but just in case
-            } else if (new Date(config.schedule_date) < new Date() && !lastCompleted) {
-              nextDue = new Date(config.schedule_date);
-            } else {
-              nextDue = new Date(config.schedule_date);
-            }
-
-            // Only add if within range
-            if (nextDue <= futureDate) {
-              const isPastDue = nextDue < new Date();
-              const templateIdToUse = (config as any).templateId || config.template_id;
-              console.log(`DEBUG: Virtual Event ${config.id}, TemplateID: ${templateIdToUse}`); // DEBUG
+              const { status, totalSections, completedSections, hasResult } = getMaintenanceStatus(schedule as any);
 
               combinedEvents.push({
-                id: `virtual-${config.id}-${nextDue.getTime()}`,
+                ...schedule,
+                maintenanceStatus: status,
+                totalSections,
+                completedSections,
+                hasResult,
+                templateId: templateIdToUse, // Ensure template ID is passed
+                frequency: config.frequency,
+                maintenanceBy: schedule.maintenanceBy || (config as any).maintenanceBy || (config as any).maintenance_by,
+                vendorName: schedule.vendorName || (config as any).vendorName || (config as any).vendor_name || instMap[config.instrument_id]?.vendorName || null,
+                vendorContact: schedule.vendorContact || (config as any).vendorContact || (config as any).vendor_contact || instMap[config.instrument_id]?.vendorContact || null,
+              });
+            });
+
+            // Continue generating upcoming occurrences after the latest real schedule
+            const maxOccurrences = getMaxOccurrences(timeRange, config.frequency);
+            const anchorDate = latestSchedule.completedDate
+              ? new Date(latestSchedule.completedDate)
+              : new Date(latestSchedule.dueDate);
+            let currentDue = getNextDate(anchorDate, config.frequency);
+            let occurrenceCount = 0;
+
+            while (currentDue <= futureDate && occurrenceCount < maxOccurrences) {
+              const dueTimestamp = currentDue.getTime();
+              if (!existingDueDates.has(dueTimestamp)) {
+                const isPastDue = currentDue < new Date();
+                combinedEvents.push({
+                  id: `virtual-${config.id}-${currentDue.getTime()}`,
+                  instrumentId: config.instrument_id,
+                  dueDate: currentDue.toISOString(),
+                  type: config.maintenance_type as any,
+                  description: `Scheduled ${config.maintenance_type}`,
+                  status: 'Scheduled',
+                  maintenanceStatus: isPastDue ? 'Overdue' : 'Pending',
+                  hasResult: false,
+                  templateId: templateIdToUse,
+                  frequency: config.frequency,
+                  maintenanceBy: latestSchedule.maintenanceBy || (config as any).maintenanceBy || (config as any).maintenance_by,
+                  vendorName: latestSchedule.vendorName || (config as any).vendorName || (config as any).vendor_name || instMap[config.instrument_id]?.vendorName || null,
+                  vendorContact: latestSchedule.vendorContact || (config as any).vendorContact || (config as any).vendor_contact || instMap[config.instrument_id]?.vendorContact || null,
+                });
+                existingDueDates.add(dueTimestamp);
+              }
+
+              currentDue = getNextDate(currentDue, config.frequency);
+              occurrenceCount++;
+            }
+          } else {
+            // No schedule exists yet, generate MULTIPLE future occurrences within time range
+            const lastCompleted = existingSchedules.find(s => s.status === 'Completed');
+            let currentDue = new Date(config.schedule_date); // Start from base schedule date
+
+            if (lastCompleted && lastCompleted.completedDate) {
+              // Calculate next due date from last completion
+              currentDue = getNextDate(new Date(lastCompleted.completedDate), config.frequency);
+            } else if (new Date(config.schedule_date) < new Date() && !lastCompleted) {
+              // If schedule date is in the past and no completion, use schedule date
+              currentDue = new Date(config.schedule_date);
+            } else {
+              // Otherwise use the configured schedule date
+              currentDue = new Date(config.schedule_date);
+            }
+
+            // Generate multiple occurrences within the time range
+            let occurrenceCount = 0;
+            const maxOccurrences = getMaxOccurrences(timeRange, config.frequency);
+
+            while (currentDue <= futureDate && occurrenceCount < maxOccurrences) {
+              const isPastDue = currentDue < new Date();
+              const templateIdToUse = (config as any).templateId || config.template_id;
+              console.log(`DEBUG: Virtual Event ${config.id}, Occurrence ${occurrenceCount + 1}, TemplateID: ${templateIdToUse}`); // DEBUG
+
+              combinedEvents.push({
+                id: `virtual-${config.id}-${currentDue.getTime()}`,
                 instrumentId: config.instrument_id,
-                dueDate: nextDue.toISOString(),
+                dueDate: currentDue.toISOString(),
                 type: config.maintenance_type as any,
                 description: `Scheduled ${config.maintenance_type}`,
                 status: 'Scheduled',
                 maintenanceStatus: isPastDue ? 'Overdue' : 'Pending',
-                templateId: templateIdToUse
+                hasResult: false,
+                templateId: templateIdToUse,
+                frequency: config.frequency,
+                maintenanceBy: (config as any).maintenanceBy || (config as any).maintenance_by,
+                vendorName: (config as any).vendorName || (config as any).vendor_name || instMap[config.instrument_id]?.vendorName || null,
+                vendorContact: (config as any).vendorContact || (config as any).vendor_contact || instMap[config.instrument_id]?.vendorContact || null,
               });
+
+              // Move to next occurrence
+              currentDue = getNextDate(currentDue, config.frequency);
+              occurrenceCount++;
             }
           }
         });
@@ -194,7 +339,10 @@ export function UpcomingMaintenanceList() {
         description: event.description,
         status: 'Scheduled',
         user_id: user?.id,
-        template_id: event.templateId || null
+        template_id: event.templateId || null,
+        maintenanceBy: event.maintenanceBy || instrumentsMap[event.instrumentId]?.maintenanceBy || 'self',
+        vendorName: event.vendorName || instrumentsMap[event.instrumentId]?.vendorName || null,
+        vendorContact: event.vendorContact || instrumentsMap[event.instrumentId]?.vendorContact || null,
       };
 
       const { data, error } = await supabase.from('maintenanceSchedules').insert(insertPayload).select().single();
@@ -268,6 +416,51 @@ export function UpcomingMaintenanceList() {
   const filteredAndSortedData = useMemo(() => {
     let data = [...upcomingSchedules];
 
+    // Status filter
+    if (statusFilter === 'pending') {
+      data = data.filter(schedule =>
+        schedule.maintenanceStatus === 'Pending' ||
+        schedule.maintenanceStatus === 'Partially Completed'
+      );
+    } else if (statusFilter === 'overdue') {
+      data = data.filter(schedule => schedule.maintenanceStatus === 'Overdue');
+    }
+    // 'all' shows everything - no filter needed
+
+    // Frequency filter
+    if (frequencyFilter !== 'all') {
+      data = data.filter(schedule => schedule.frequency === frequencyFilter);
+    }
+
+    // Column filters (Excel-like)
+    if (columnFilters.instrument.length > 0) {
+      data = data.filter(schedule => {
+        const instrument = instrumentsMap[schedule.instrumentId];
+        return columnFilters.instrument.includes(instrument?.eqpId || '');
+      });
+    }
+    if (columnFilters.type.length > 0) {
+      data = data.filter(schedule => columnFilters.type.includes(schedule.type || ''));
+    }
+    if (columnFilters.maintenanceBy.length > 0) {
+      data = data.filter(schedule => columnFilters.maintenanceBy.includes(schedule.maintenanceBy || ''));
+    }
+    if (columnFilters.frequency.length > 0) {
+      data = data.filter(schedule => columnFilters.frequency.includes(schedule.frequency || ''));
+    }
+    if (columnFilters.location.length > 0) {
+      data = data.filter(schedule => {
+        const instrument = instrumentsMap[schedule.instrumentId];
+        return columnFilters.location.includes(instrument?.location || '');
+      });
+    }
+    if (columnFilters.instrumentType.length > 0) {
+      data = data.filter(schedule => {
+        const instrument = instrumentsMap[schedule.instrumentId];
+        return columnFilters.instrumentType.includes(instrument?.instrumentType || '');
+      });
+    }
+
     // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -278,7 +471,10 @@ export function UpcomingMaintenanceList() {
           instrument?.instrumentType?.toLowerCase().includes(term) ||
           instrument?.model?.toLowerCase().includes(term) ||
           instrument?.location?.toLowerCase().includes(term) ||
-          schedule.type?.toLowerCase().includes(term)
+          schedule.type?.toLowerCase().includes(term) ||
+          (schedule.vendorName && schedule.vendorName.toLowerCase().includes(term)) ||
+          (schedule.vendorContact && schedule.vendorContact.toLowerCase().includes(term)) ||
+          (schedule.maintenanceBy && schedule.maintenanceBy.toLowerCase().includes(term))
         );
       });
     }
@@ -317,7 +513,30 @@ export function UpcomingMaintenanceList() {
     });
 
     return data;
-  }, [upcomingSchedules, instrumentsMap, searchTerm, sortField, sortOrder]);
+  }, [upcomingSchedules, instrumentsMap, searchTerm, sortField, sortOrder, statusFilter, frequencyFilter, columnFilters]);
+
+  // Get all unique values for column filters
+  const getColumnValues = (column: keyof typeof columnFilters): string[] => {
+    return upcomingSchedules.map(schedule => {
+      const instrument = instrumentsMap[schedule.instrumentId];
+      switch (column) {
+        case 'instrument':
+          return instrument?.eqpId || '';
+        case 'type':
+          return schedule.type || '';
+        case 'maintenanceBy':
+          return schedule.maintenanceBy || '';
+        case 'frequency':
+          return schedule.frequency || '';
+        case 'location':
+          return instrument?.location || '';
+        case 'instrumentType':
+          return instrument?.instrumentType || '';
+        default:
+          return '';
+      }
+    });
+  };
 
   const timeRangeLabel = {
     '30': 'Next 30 Days',
@@ -326,14 +545,33 @@ export function UpcomingMaintenanceList() {
     '365': 'Next 1 Year'
   };
 
+  // Check if any schedules are being limited and get info message
+  const limitInfo = useMemo(() => {
+    const dailyLimited = upcomingSchedules.some(s => s.frequency === 'Daily' && parseInt(timeRange) > 30);
+    const weeklyLimited = upcomingSchedules.some(s => s.frequency === 'Weekly' && parseInt(timeRange) > 180);
+
+    if (dailyLimited && weeklyLimited) {
+      return "Showing next 30 daily tasks and 26 weekly tasks for optimal performance. Your schedules continue repeating automatically.";
+    } else if (dailyLimited) {
+      return "Showing next 30 daily tasks for optimal performance. Your daily schedule continues repeating automatically every day.";
+    } else if (weeklyLimited) {
+      return "Showing next 26 weekly tasks for optimal performance. Your weekly schedule continues repeating automatically every week.";
+    }
+    return null;
+  }, [upcomingSchedules, timeRange]);
+
+
   return (
     <>
       <Card className="transition-all hover:shadow-md">
-        <CardHeader>
+        <CardHeader className="sticky top-0 z-30 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <CardTitle className="font-headline">Upcoming Maintenance</CardTitle>
-              <CardDescription>{timeRangeLabel[timeRange]}</CardDescription>
+              <CardDescription>
+                {timeRangeLabel[timeRange]}
+                {filteredAndSortedData.length > 0 && ` • ${filteredAndSortedData.length} ${filteredAndSortedData.length === 1 ? 'item' : 'items'}`}
+              </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {/* Search */}
@@ -346,6 +584,34 @@ export function UpcomingMaintenanceList() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
+
+              {/* Status Filter */}
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending Only</SelectItem>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Frequency Filter */}
+              <Select value={frequencyFilter} onValueChange={(v) => setFrequencyFilter(v as FrequencyFilter)}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Frequency</SelectItem>
+                  <SelectItem value="Daily">Daily</SelectItem>
+                  <SelectItem value="Weekly">Weekly</SelectItem>
+                  <SelectItem value="Monthly">Monthly</SelectItem>
+                  <SelectItem value="3 Months">3 Months</SelectItem>
+                  <SelectItem value="6 Months">6 Months</SelectItem>
+                  <SelectItem value="1 Year">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
 
               {/* Time Range Filter */}
               <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
@@ -363,115 +629,198 @@ export function UpcomingMaintenanceList() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
+          {/* Info message for limited schedules */}
+          {limitInfo && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-900 dark:text-blue-100">
+                {limitInfo}
+              </div>
+            </div>
+          )}
+
+          {/* Mobile View: Cards */}
+          <div className="md:hidden space-y-4">
+            {isLoading ? (
+              Array(3).fill(0).map((_, i) => (
+                <Skeleton key={i} className="h-48 w-full rounded-xl" />
+              ))
+            ) : filteredAndSortedData.length > 0 ? (
+              filteredAndSortedData.map((schedule) => {
+                const daysLeft = differenceInDays(new Date(schedule.dueDate), new Date());
+                return (
+                  <MobileMaintenanceCard
+                    key={schedule.id}
+                    schedule={schedule}
+                    instrument={instrumentsMap[schedule.instrumentId]}
+                    onUpdateClick={handleUpdateClick}
+                    onViewClick={(s) => {
+                      setViewSchedule(s);
+                      setViewInstrumentId(s.instrumentId);
+                    }}
+                    daysLeft={daysLeft}
+                  />
+                );
+              })
+            ) : (
+              <div className="text-center py-8 text-muted-foreground border rounded-lg border-dashed">
+                {searchTerm ? 'No matches found.' : 'No upcoming maintenance.'}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View: Table */}
+          <Table className="hidden md:table">
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[80px]">Status</TableHead>
                 <TableHead>
-                  <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort('instrument')}>
-                    Instrument {getSortIcon('instrument')}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort('instrumentType')}>
-                    Type {getSortIcon('instrumentType')}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort('location')}>
-                    Location {getSortIcon('location')}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort('dueDate')}>
-                    Due Date {getSortIcon('dueDate')}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleSort('instrument')}
+                    >
+                      Instrument
+                      {sortField === 'instrument' && (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1" /> : <ArrowDown className="w-3 h-3 inline ml-1" />)}
+                    </span>
+                    <ColumnFilterPopover
+                      column="Instrument"
+                      values={getColumnValues('instrument')}
+                      selectedValues={columnFilters.instrument}
+                      onFilterChange={(values) => setColumnFilters({ ...columnFilters, instrument: values })}
+                    />
+                  </div>
                 </TableHead>
                 <TableHead>
-                  <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort('type')}>
-                    Maint. Type {getSortIcon('type')}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleSort('type')}
+                    >
+                      Type
+                      {sortField === 'type' && (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1" /> : <ArrowDown className="w-3 h-3 inline ml-1" />)}
+                    </span>
+                    <ColumnFilterPopover
+                      column="Type"
+                      values={getColumnValues('type')}
+                      selectedValues={columnFilters.type}
+                      onFilterChange={(values) => setColumnFilters({ ...columnFilters, type: values })}
+                    />
+                  </div>
                 </TableHead>
                 <TableHead>
-                  <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort('status')}>
-                    Status {getSortIcon('status')}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <span>Maintenance By</span>
+                    <ColumnFilterPopover
+                      column="Maintenance By"
+                      values={getColumnValues('maintenanceBy')}
+                      selectedValues={columnFilters.maintenanceBy}
+                      onFilterChange={(values) => setColumnFilters({ ...columnFilters, maintenanceBy: values })}
+                    />
+                  </div>
                 </TableHead>
-                <TableHead className="text-right">
-                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => handleSort('daysLeft')}>
-                    Days Until Due {getSortIcon('daysLeft')}
-                  </Button>
+                <TableHead>
+                  <div className="flex items-center gap-1">
+                    <span>Frequency</span>
+                    <ColumnFilterPopover
+                      column="Frequency"
+                      values={getColumnValues('frequency')}
+                      selectedValues={columnFilters.frequency}
+                      onFilterChange={(values) => setColumnFilters({ ...columnFilters, frequency: values })}
+                    />
+                  </div>
                 </TableHead>
+                <TableHead>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleSort('location')}
+                    >
+                      Location
+                      {sortField === 'location' && (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1" /> : <ArrowDown className="w-3 h-3 inline ml-1" />)}
+                    </span>
+                    <ColumnFilterPopover
+                      column="Location"
+                      values={getColumnValues('location')}
+                      selectedValues={columnFilters.location}
+                      onFilterChange={(values) => setColumnFilters({ ...columnFilters, location: values })}
+                    />
+                  </div>
+                </TableHead>
+                <TableHead>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => handleSort('dueDate')}
+                    >
+                      Due Date
+                      {sortField === 'dueDate' && (sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1" /> : <ArrowDown className="w-3 h-3 inline ml-1" />)}
+                    </span>
+                  </div>
+                </TableHead>
+                <TableHead>Days Left</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-6 w-16 ml-auto" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
+                <TableRow>
+                  <TableCell colSpan={9} className="h-24 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      Loading schedules...
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : filteredAndSortedData.length > 0 ? (
-                filteredAndSortedData.map(schedule => {
-                  const dueDate = new Date(schedule.dueDate);
-                  const daysLeft = differenceInDays(dueDate, new Date());
+                filteredAndSortedData.map((schedule) => {
+                  const daysLeft = differenceInDays(new Date(schedule.dueDate), new Date());
                   const instrument = instrumentsMap[schedule.instrumentId];
 
-                  // Format type display
-                  let typeDisplay: string = schedule.type;
-                  if (schedule.type === 'Preventative Maintenance') typeDisplay = 'PM';
-                  if (schedule.type === 'AMC') typeDisplay = 'AMC';
-
                   return (
-                    <TableRow
-                      key={schedule.id}
-                      className={cn(
-                        schedule.maintenanceStatus === 'Completed' && "opacity-60"
-                      )}
-                    >
-                      <TableCell>
-                        <div className="font-medium">{instrument?.eqpId || 'Unknown'}</div>
-                        <div className="text-xs text-muted-foreground">{instrument?.model}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-normal">
-                          {instrument?.instrumentType || '-'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{instrument?.location || '-'}</TableCell>
-                      <TableCell>{dueDate.toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{typeDisplay}</Badge>
-                      </TableCell>
+                    <TableRow key={schedule.id} className="group hover:bg-muted/50 transition-colors">
                       <TableCell>
                         {getStatusBadge(schedule)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="font-medium">
+                        <div className="flex flex-col">
+                          <span>{instrument?.eqpId || 'Unknown Instrument'}</span>
+                          <span className="text-xs text-muted-foreground">{instrument?.model || 'No ID'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-normal">
+                          {schedule.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {schedule.maintenanceBy === 'vendor' ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium">Vendor</span>
+                            <span className="text-xs text-muted-foreground">{schedule.vendorName || 'N/A'}</span>
+                            {schedule.vendorContact && (
+                              <span className="text-xs text-muted-foreground">{schedule.vendorContact}</span>
+                            )}
+                          </div>
+                        ) : (
+                          'Self'
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{schedule.frequency}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{instrument?.location || 'N/A'}</TableCell>
+                      <TableCell>
+                        <span className="font-medium">{formatDate(schedule.dueDate)}</span>
+                      </TableCell>
+                      <TableCell>
                         <Badge variant={daysLeft < 0 ? 'destructive' : daysLeft <= 7 ? 'destructive' : 'secondary'}>
                           {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d`}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {schedule.maintenanceStatus !== 'Completed' && (
-                          <Button
-                            size="sm"
-                            variant={schedule.maintenanceStatus === 'Partially Completed' ? 'default' : 'outline'}
-                            onClick={() => handleUpdateClick(schedule)}
-                          >
-                            {schedule.maintenanceStatus === 'Partially Completed' ? 'Continue' : 'Update'}
-                          </Button>
-                        )}
                         {schedule.maintenanceStatus === 'Completed' && (
                           <Button
                             size="sm"
-                            variant="ghost"
+                            className="bg-green-600 text-white hover:bg-green-700"
                             onClick={() => {
                               setViewSchedule(schedule);
                               setViewInstrumentId(schedule.instrumentId);
@@ -480,13 +829,42 @@ export function UpcomingMaintenanceList() {
                             View
                           </Button>
                         )}
+                        {schedule.maintenanceStatus === 'Partially Completed' && (
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              size="sm"
+                              onClick={() => handleUpdateClick(schedule)}
+                            >
+                              Continue
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setViewSchedule(schedule);
+                                setViewInstrumentId(schedule.instrumentId);
+                              }}
+                            >
+                              View
+                            </Button>
+                          </div>
+                        )}
+                        {schedule.maintenanceStatus !== 'Completed' && schedule.maintenanceStatus !== 'Partially Completed' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleUpdateClick(schedule)}
+                          >
+                            Update
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground h-24">
                     {searchTerm ? 'No results match your search.' : `No upcoming maintenance in the ${timeRangeLabel[timeRange].toLowerCase()}.`}
                   </TableCell>
                 </TableRow>

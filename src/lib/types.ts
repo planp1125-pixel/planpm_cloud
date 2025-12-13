@@ -17,6 +17,10 @@ export type MaintenanceEvent = {
   completedDate?: string;
   completionNotes?: string;
   templateId?: string | null;
+  frequency?: MaintenanceFrequency;
+  maintenanceBy?: 'self' | 'vendor';
+  vendorName?: string | null;
+  vendorContact?: string | null;
 };
 
 export type MaintenanceConfiguration = {
@@ -27,6 +31,9 @@ export type MaintenanceConfiguration = {
   schedule_date: string;
   template_id?: string | null;
   user_id?: string;
+  maintenanceBy?: 'self' | 'vendor';
+  vendorName?: string | null;
+  vendorContact?: string | null;
 };
 
 export type MaintenanceResult = {
@@ -41,7 +48,7 @@ export type MaintenanceResult = {
 };
 
 // Template Section Types
-export type TemplateSectionType = 'tolerance' | 'range' | 'simple';
+export type TemplateSectionType = 'tolerance' | 'range' | 'simple' | 'checklist';
 
 export type TestRow = {
   id: string;
@@ -54,6 +61,7 @@ export type TestRow = {
   measured?: number;   // User-entered actual value
   error?: number;      // Auto-calculated: measured - reference
   passed?: boolean;    // Auto-calculated based on tolerance/range
+  checked?: boolean;   // For checklist sections
 };
 
 export type TestSection = {
@@ -89,5 +97,7 @@ export type Instrument = {
   nextMaintenanceDate: string;
   imageId: string;
   imageUrl?: string; // Optional user-provided image URL
+  maintenanceBy?: 'self' | 'vendor';
+  vendorName?: string | null;
+  vendorContact?: string | null;
 };
-

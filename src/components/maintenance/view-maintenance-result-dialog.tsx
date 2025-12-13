@@ -45,12 +45,25 @@ export function ViewMaintenanceResultDialog({
 }: ViewMaintenanceResultDialogProps) {
     const [result, setResult] = useState<ResultData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [instrumentInfo, setInstrumentInfo] = useState<{ eqpId: string; model: string; make: string } | null>(null);
 
     useEffect(() => {
         const fetchResult = async () => {
             if (!isOpen) return;
 
             setIsLoading(true);
+
+            // Fetch instrument information
+            const { data: instrument } = await supabase
+                .from('instruments')
+                .select('eqpId, model, make')
+                .eq('id', instrumentId)
+                .single();
+
+            if (instrument) {
+                setInstrumentInfo(instrument);
+            }
+
             const { data } = await supabase
                 .from('maintenanceResults')
                 .select('*')
@@ -64,7 +77,7 @@ export function ViewMaintenanceResultDialog({
         };
 
         fetchResult();
-    }, [isOpen, maintenanceEvent.id]);
+    }, [isOpen, maintenanceEvent.id, instrumentId]);
 
     const getOverallStatus = (testData: TestSection[] | undefined) => {
         if (!testData || testData.length === 0) return null;
@@ -92,15 +105,29 @@ export function ViewMaintenanceResultDialog({
             <DialogContent className="max-w-6xl w-[95vw] h-[85vh] flex flex-col p-0">
                 <DialogHeader className="px-6 py-4 border-b">
                     <div className="flex items-center justify-between">
-                        <div>
-                            <DialogTitle>Maintenance Result</DialogTitle>
-                            <DialogDescription>
-                                {maintenanceEvent.type} - {maintenanceEvent.description}
-                            </DialogDescription>
+                        <div className="flex-1">
+                            <DialogTitle className="flex items-center gap-2 flex-wrap">
+                                Maintenance Result
+                                {instrumentInfo && (
+                                    <Badge variant="outline" className="font-mono text-base px-3 py-1">
+                                        {instrumentInfo.eqpId}
+                                    </Badge>
+                                )}
+                            </DialogTitle>
+                            <div className="mt-2 text-sm text-muted-foreground">
+                                {instrumentInfo && (
+                                    <div className="text-sm mb-1">
+                                        <span className="font-medium">{instrumentInfo.make} {instrumentInfo.model}</span>
+                                    </div>
+                                )}
+                                <div>
+                                    {maintenanceEvent.type} - {maintenanceEvent.description}
+                                </div>
+                            </div>
                         </div>
                         {overallStatus && (
                             <Badge className={cn(
-                                "text-sm px-3 py-1",
+                                "text-sm px-3 py-1 ml-4",
                                 overallStatus.allPass
                                     ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                                     : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
@@ -127,10 +154,13 @@ export function ViewMaintenanceResultDialog({
                                 <CardContent className="pt-4">
                                     <div className="grid grid-cols-3 gap-4">
                                         <div>
-                                            <div className="text-sm text-muted-foreground">Completed Date</div>
+                                            <div className="text-sm text-muted-foreground">Completed Date & Time</div>
                                             <div className="font-medium flex items-center gap-1">
                                                 <Calendar className="w-4 h-4" />
-                                                {format(new Date(result.completedDate), 'PPP')}
+                                                <div className="flex flex-col">
+                                                    <span>{format(new Date(result.completedDate), 'PPP')}</span>
+                                                    <span className="text-sm text-muted-foreground">{format(new Date(result.completedDate), 'p')}</span>
+                                                </div>
                                             </div>
                                         </div>
                                         <div>
@@ -140,7 +170,7 @@ export function ViewMaintenanceResultDialog({
                                             </Badge>
                                         </div>
                                         <div>
-                                            <div className="text-sm text-muted-foreground">Document</div>
+                                            <div className="text-sm text-muted-foreground">Main Document</div>
                                             {result.documentUrl ? (
                                                 <a
                                                     href={result.documentUrl}
@@ -152,7 +182,7 @@ export function ViewMaintenanceResultDialog({
                                                     View Certificate
                                                 </a>
                                             ) : (
-                                                <span className="text-muted-foreground">-</span>
+                                                <span className="text-muted-foreground text-sm">No document attached</span>
                                             )}
                                         </div>
                                     </div>
@@ -245,21 +275,82 @@ export function ViewMaintenanceResultDialog({
                                                 {/* Section Document */}
                                                 {section.documentUrl && (
                                                     <div className="mt-3 pt-3 border-t">
-                                                        <a
-                                                            href={section.documentUrl}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-2 text-primary hover:underline text-sm"
-                                                        >
-                                                            <FileText className="w-4 h-4" />
-                                                            View Test Document
-                                                        </a>
+                                                        <div className="text-sm text-muted-foreground mb-2">Test Document:</div>
+                                                        {section.documentUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                            <div className="space-y-2">
+                                                                <img
+                                                                    src={section.documentUrl}
+                                                                    alt="Section document"
+                                                                    className="max-w-full h-auto rounded border"
+                                                                    style={{ maxHeight: '400px' }}
+                                                                />
+                                                                <a
+                                                                    href={section.documentUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-2 text-primary hover:underline text-sm"
+                                                                >
+                                                                    <FileText className="w-4 h-4" />
+                                                                    View Full Image
+                                                                </a>
+                                                            </div>
+                                                        ) : (
+                                                            <a
+                                                                href={section.documentUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-2 text-primary hover:underline text-sm"
+                                                            >
+                                                                <FileText className="w-4 h-4" />
+                                                                View Test Document
+                                                            </a>
+                                                        )}
                                                     </div>
                                                 )}
                                             </CardContent>
                                         </Card>
                                     ))}
                                 </div>
+                            )}
+
+                            {/* Main Result Document Display */}
+                            {result.documentUrl && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-base">Main Certificate/Report</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {result.documentUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                            <div className="space-y-2">
+                                                <img
+                                                    src={result.documentUrl}
+                                                    alt="Main result document"
+                                                    className="max-w-full h-auto rounded border"
+                                                    style={{ maxHeight: '500px' }}
+                                                />
+                                                <a
+                                                    href={result.documentUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-2 text-primary hover:underline text-sm"
+                                                >
+                                                    <FileText className="w-4 h-4" />
+                                                    View Full Image
+                                                </a>
+                                            </div>
+                                        ) : (
+                                            <a
+                                                href={result.documentUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 text-primary hover:underline"
+                                            >
+                                                <FileText className="w-4 h-4" />
+                                                View Certificate/Report
+                                            </a>
+                                        )}
+                                    </CardContent>
+                                </Card>
                             )}
                         </div>
                     ) : (

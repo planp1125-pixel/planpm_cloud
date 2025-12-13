@@ -169,7 +169,11 @@ export default function DesignResultsPage() {
             type: type,
             tolerance: type === 'tolerance' ? 0.1 : undefined,
             unit: '',
-            rows: [{ id: crypto.randomUUID(), label: 'Row 1', reference: 0 }]
+            rows: [{
+                id: crypto.randomUUID(),
+                label: type === 'checklist' ? 'Checklist item 1' : 'Row 1',
+                reference: type === 'tolerance' ? 0 : undefined
+            }]
         });
     };
 
@@ -228,6 +232,9 @@ export default function DesignResultsPage() {
                                 <Button type="button" onClick={() => addNewSection('simple')} variant="outline" size="sm">
                                     <Plus className="w-4 h-4 mr-1" /> Simple Section
                                 </Button>
+                                <Button type="button" onClick={() => addNewSection('checklist')} variant="outline" size="sm">
+                                    <Plus className="w-4 h-4 mr-1" /> Checklist Section
+                                </Button>
                             </div>
                         </div>
 
@@ -272,7 +279,7 @@ export default function DesignResultsPage() {
         <div className="flex-1 space-y-6 p-4 md:p-6 pt-6 w-full">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight font-headline">Design Results</h2>
+                    <h2 className="text-3xl font-bold tracking-tight font-headline">Templates</h2>
                     <p className="text-muted-foreground">Create and manage test templates for maintenance results</p>
                 </div>
                 <Button onClick={handleCreateNew}>
@@ -363,10 +370,10 @@ function SectionEditor({
     setValue: any;
     onRemove: () => void;
 }) {
-    const { fields: rowFields, append: appendRow, remove: removeRow } = useFieldArray({
-        control,
-        name: `sections.${index}.rows`
-    });
+        const { fields: rowFields, append: appendRow, remove: removeRow } = useFieldArray({
+            control,
+            name: `sections.${index}.rows`
+        });
 
     const sectionType = watch(`sections.${index}.type`) as TemplateSectionType;
 
@@ -375,6 +382,7 @@ function SectionEditor({
             case 'tolerance': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
             case 'range': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
             case 'simple': return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+            case 'checklist': return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
         }
     };
 
@@ -397,23 +405,24 @@ function SectionEditor({
 
             <CardContent className="space-y-4">
                 {/* Section Settings */}
-                <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
-                    <div className="space-y-1">
-                        <Label className="text-xs">Section Type</Label>
-                        <Select
-                            value={sectionType}
-                            onValueChange={(value) => setValue(`sections.${index}.type`, value)}
-                        >
-                            <SelectTrigger className="h-8">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="tolerance">Tolerance (±value)</SelectItem>
-                                <SelectItem value="range">Range (min-max)</SelectItem>
-                                <SelectItem value="simple">Simple (no limits)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
+                        <div className="space-y-1">
+                            <Label className="text-xs">Section Type</Label>
+                            <Select
+                                value={sectionType}
+                                onValueChange={(value) => setValue(`sections.${index}.type`, value)}
+                            >
+                                <SelectTrigger className="h-8">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="tolerance">Tolerance (±value)</SelectItem>
+                                    <SelectItem value="range">Range (min-max)</SelectItem>
+                                    <SelectItem value="simple">Simple (no limits)</SelectItem>
+                                    <SelectItem value="checklist">Checklist</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
                     {sectionType === 'tolerance' && (
                         <div className="space-y-1">
@@ -428,14 +437,16 @@ function SectionEditor({
                         </div>
                     )}
 
-                    <div className="space-y-1">
-                        <Label className="text-xs">Unit</Label>
-                        <Input
-                            {...register(`sections.${index}.unit` as const)}
-                            placeholder="e.g., bar, g"
-                            className="h-8"
-                        />
-                    </div>
+                    {sectionType !== 'checklist' && (
+                        <div className="space-y-1">
+                            <Label className="text-xs">Unit</Label>
+                            <Input
+                                {...register(`sections.${index}.unit` as const)}
+                                placeholder="e.g., bar, g"
+                                className="h-8"
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Column Headers */}
@@ -448,8 +459,14 @@ function SectionEditor({
                             <div className="col-span-2">Max</div>
                         </>
                     )}
-                    <div className="col-span-2">Unit</div>
-                    <div className="col-span-2"></div>
+                    {sectionType === 'checklist' ? (
+                        <div className="col-span-8">Checklist Items</div>
+                    ) : (
+                        <>
+                            <div className="col-span-2">Unit</div>
+                            <div className="col-span-2"></div>
+                        </>
+                    )}
                 </div>
 
                 <Separator />
@@ -458,69 +475,95 @@ function SectionEditor({
                 <div className="space-y-2">
                     {rowFields.map((row, rowIndex) => (
                         <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
-                            <div className="col-span-4">
-                                <Input
-                                    {...register(`sections.${index}.rows.${rowIndex}.label` as const)}
-                                    placeholder={`Reading ${rowIndex + 1}`}
-                                    className="h-9"
-                                />
-                            </div>
-
-                            {sectionType === 'tolerance' && (
-                                <div className="col-span-2">
-                                    <Input
-                                        {...register(`sections.${index}.rows.${rowIndex}.reference` as const, { valueAsNumber: true })}
-                                        type="number"
-                                        step="any"
-                                        placeholder="0"
-                                        className="h-9"
-                                    />
-                                </div>
-                            )}
-
-                            {sectionType === 'range' && (
+                            {sectionType === 'checklist' ? (
                                 <>
-                                    <div className="col-span-2">
+                                    <div className="col-span-10">
                                         <Input
-                                            {...register(`sections.${index}.rows.${rowIndex}.min` as const, { valueAsNumber: true })}
-                                            type="number"
-                                            step="any"
-                                            placeholder="Min"
+                                            {...register(`sections.${index}.rows.${rowIndex}.label` as const)}
+                                            placeholder={`Checklist item ${rowIndex + 1}`}
                                             className="h-9"
                                         />
                                     </div>
-                                    <div className="col-span-2">
+                                    <div className="col-span-2 flex justify-end">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={() => removeRow(rowIndex)}
+                                            disabled={rowFields.length === 1}
+                                        >
+                                            <Trash2 className="w-4 h-4 text-muted-foreground" />
+                                        </Button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="col-span-4">
                                         <Input
-                                            {...register(`sections.${index}.rows.${rowIndex}.max` as const, { valueAsNumber: true })}
-                                            type="number"
-                                            step="any"
-                                            placeholder="Max"
+                                            {...register(`sections.${index}.rows.${rowIndex}.label` as const)}
+                                            placeholder={`Reading ${rowIndex + 1}`}
                                             className="h-9"
                                         />
+                                    </div>
+
+                                    {sectionType === 'tolerance' && (
+                                        <div className="col-span-2">
+                                            <Input
+                                                {...register(`sections.${index}.rows.${rowIndex}.reference` as const, { valueAsNumber: true })}
+                                                type="number"
+                                                step="any"
+                                                placeholder="0"
+                                                className="h-9"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {sectionType === 'range' && (
+                                        <>
+                                            <div className="col-span-2">
+                                                <Input
+                                                    {...register(`sections.${index}.rows.${rowIndex}.min` as const, { valueAsNumber: true })}
+                                                    type="number"
+                                                    step="any"
+                                                    placeholder="Min"
+                                                    className="h-9"
+                                                />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <Input
+                                                    {...register(`sections.${index}.rows.${rowIndex}.max` as const, { valueAsNumber: true })}
+                                                    type="number"
+                                                    step="any"
+                                                    placeholder="Max"
+                                                    className="h-9"
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    <div className="col-span-2">
+                                        <Input
+                                            {...register(`sections.${index}.rows.${rowIndex}.unit` as const)}
+                                            placeholder="unit"
+                                            className="h-9"
+                                        />
+                                    </div>
+
+                                    <div className="col-span-2 flex justify-end gap-1">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={() => removeRow(rowIndex)}
+                                            disabled={rowFields.length === 1}
+                                        >
+                                            <Trash2 className="w-4 h-4 text-muted-foreground" />
+                                        </Button>
                                     </div>
                                 </>
                             )}
-
-                            <div className="col-span-2">
-                                <Input
-                                    {...register(`sections.${index}.rows.${rowIndex}.unit` as const)}
-                                    placeholder="unit"
-                                    className="h-9"
-                                />
-                            </div>
-
-                            <div className="col-span-2 flex justify-end gap-1">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => removeRow(rowIndex)}
-                                    disabled={rowFields.length === 1}
-                                >
-                                    <Trash2 className="w-4 h-4 text-muted-foreground" />
-                                </Button>
-                            </div>
                         </div>
                     ))}
                 </div>
@@ -532,9 +575,9 @@ function SectionEditor({
                     className="w-full border-dashed"
                     onClick={() => appendRow({
                         id: crypto.randomUUID(),
-                        label: `Reading ${rowFields.length + 1}`,
-                        reference: 0,
-                        unit: ''
+                        label: sectionType === 'checklist' ? `Checklist item ${rowFields.length + 1}` : `Reading ${rowFields.length + 1}`,
+                        reference: sectionType === 'tolerance' ? 0 : undefined,
+                        unit: sectionType === 'checklist' ? undefined : ''
                     })}
                 >
                     <Plus className="w-3 h-3 mr-2" /> Add Row

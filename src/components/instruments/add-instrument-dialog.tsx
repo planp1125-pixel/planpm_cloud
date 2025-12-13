@@ -39,7 +39,13 @@ const scheduleSchema = z.object({
   frequency: z.string().min(1, 'Frequency is required.'),
   scheduleDate: z.date({ required_error: 'Schedule date is required.' }),
   templateId: z.string().optional(),
-});
+  maintenanceBy: z.enum(['self', 'vendor']).default('self'),
+  vendorName: z.string().optional(),
+  vendorContact: z.string().optional(),
+}).refine(
+  (data) => data.maintenanceBy === 'self' || (data.vendorName && data.vendorName.trim().length > 0),
+  { message: 'Vendor name is required when maintenance is by vendor', path: ['vendorName'] }
+);
 
 const formSchema = z.object({
   eqpId: z.string().min(1, 'Equipment ID is required.'),
@@ -117,6 +123,9 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
         frequency: '',
         scheduleDate: new Date(),
         templateId: '',
+        maintenanceBy: 'self',
+        vendorName: '',
+        vendorContact: '',
       }],
       imageUrl: '',
     },
@@ -186,6 +195,9 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
       nextMaintenanceDate: nextMaintenanceDate.toISOString(),
       imageId: imageId,
       imageUrl: uploadedImageUrl || '',
+      maintenanceBy: primarySchedule.maintenanceBy,
+      vendorName: primarySchedule.maintenanceBy === 'vendor' ? primarySchedule.vendorName || '' : null,
+      vendorContact: primarySchedule.maintenanceBy === 'vendor' ? primarySchedule.vendorContact || '' : null,
     };
 
     if (!instrumentTypes.find(t => t.value.toLowerCase() === values.instrumentType.toLowerCase())) {
@@ -209,7 +221,10 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
       frequency: schedule.frequency,
       schedule_date: schedule.scheduleDate.toISOString(),
       template_id: schedule.templateId || null,
-      user_id: user?.id
+      user_id: user?.id,
+      maintenanceBy: schedule.maintenanceBy,
+      vendorName: schedule.maintenanceBy === 'vendor' ? schedule.vendorName || '' : null,
+      vendorContact: schedule.maintenanceBy === 'vendor' ? schedule.vendorContact || '' : null,
     }));
 
     const { error: configError } = await supabase.from('maintenance_configurations').insert(scheduleInserts);
@@ -338,7 +353,7 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => append({ maintenanceType: '', frequency: '', scheduleDate: new Date(), templateId: '' })}
+                    onClick={() => append({ maintenanceType: '', frequency: '', scheduleDate: new Date(), templateId: '', maintenanceBy: 'self', vendorName: '', vendorContact: '' })}
                   >
                     <Plus className="h-4 w-4 mr-1" /> Add
                   </Button>
@@ -397,6 +412,64 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
                         )}
                       />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`schedules.${index}.maintenanceBy`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Maintenance By</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || 'self'}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select responsible party" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="self">Self</SelectItem>
+                                <SelectItem value="vendor">Vendor</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {form.watch(`schedules.${index}.maintenanceBy`) === 'vendor' && (
+                        <FormField
+                          control={form.control}
+                          name={`schedules.${index}.vendorName`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Vendor Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Vendor company or contact" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
+
+                    {form.watch(`schedules.${index}.maintenanceBy`) === 'vendor' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name={`schedules.${index}.vendorContact`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Vendor Contact (email or phone)</FormLabel>
+                              <FormControl>
+                                <Input placeholder="optional" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div />
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                       <FormField

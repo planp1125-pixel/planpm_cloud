@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Menu, LogOut, Settings, User } from 'lucide-react';
+import { Bell, LogOut, Settings, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,13 +11,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useSidebar } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/contexts/auth-context';
 import Link from 'next/link';
 
 export function Header() {
-  const { toggleSidebar, isMobile } = useSidebar();
   const { user, signOut, isLoading } = useAuth();
 
   // Get initials from email or name
@@ -39,17 +37,6 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
-      {isMobile && (
-        <Button
-          variant="outline"
-          size="icon"
-          className="shrink-0"
-          onClick={toggleSidebar}
-        >
-          <Menu className="h-5 w-5" />
-          <span className="sr-only">Toggle navigation menu</span>
-        </Button>
-      )}
       <div className="flex w-full items-center justify-end gap-4">
         <ThemeToggle />
         <Button variant="ghost" size="icon" className="rounded-full">

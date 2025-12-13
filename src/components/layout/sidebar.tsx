@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, FlaskConical, LayoutDashboard, Wrench, PanelLeft, ClipboardList } from 'lucide-react';
+import { Bot, LayoutDashboard, Wrench, ClipboardList, Settings, PanelLeft, FileText, FlaskConical } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -12,15 +12,15 @@ import {
   SidebarFooter,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 
 const menuItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/instruments', label: 'Instruments', icon: Wrench },
-  { href: '/results', label: 'Maintenance Results', icon: ClipboardList },
-  { href: '/design-results', label: 'Design Results', icon: ClipboardList },
+  { href: '/results', label: 'Maintenance History', icon: ClipboardList },
+  { href: '/design-results', label: 'Templates', icon: FileText },
   { href: '/advisor', label: 'Predictive Advisor', icon: Bot },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -29,16 +29,21 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r">
-      <SidebarHeader>
-        <div className={`flex items-center ${open ? 'justify-between' : 'justify-center'} p-2`}>
-          <Link href="/" className="flex items-center gap-2">
-            <FlaskConical className="w-8 h-8 text-primary" />
-            {open && <h1 className="text-2xl font-bold font-headline text-foreground">LabTrack</h1>}
-          </Link>
+      <SidebarHeader className="h-16 px-3 py-0 border-b">
+        <div className="flex h-full items-center justify-start gap-2">
+          <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+            <PanelLeft className="w-4 h-4" />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+          {open && (
+            <Link href="/" className="flex items-center gap-2 text-lg font-bold font-headline tracking-tight whitespace-nowrap">
+              <FlaskConical className="h-5 w-5 text-primary" />
+              <span>Plan-PM</span>
+            </Link>
+          )}
         </div>
       </SidebarHeader>
-      <Separator />
-      <SidebarMenu className="flex-1 p-4">
+      <SidebarMenu className="flex-1 px-3 py-4">
         {menuItems.map((item) => (
           <SidebarMenuItem key={item.href}>
             <Link href={item.href}>
@@ -54,15 +59,6 @@ export function AppSidebar() {
           </SidebarMenuItem>
         ))}
       </SidebarMenu>
-      <Separator />
-      <SidebarFooter className="p-4">
-        <div className="flex items-center justify-between">
-          {open && <p className="text-xs text-muted-foreground">&copy; 2024 LabTrack</p>}
-          <Button variant="ghost" size="icon" onClick={toggleSidebar} className={open ? "ml-auto" : "mx-auto"}>
-            <PanelLeft className="w-4 h-4" />
-          </Button>
-        </div>
-      </SidebarFooter>
     </Sidebar>
   );
 }

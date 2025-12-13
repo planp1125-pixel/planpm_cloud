@@ -98,6 +98,22 @@ export const columns = (
       header: 'Location',
     },
     {
+      id: 'maintenanceBy',
+      header: 'Maintenance By',
+      cell: ({ row }) => {
+        const instrument = row.original;
+        if (instrument.maintenanceBy === 'vendor') {
+          return (
+            <div className="flex flex-col">
+              <span className="font-medium">Vendor</span>
+              <span className="text-xs text-muted-foreground">{instrument.vendorName || 'N/A'}</span>
+            </div>
+          );
+        }
+        return 'Self';
+      },
+    },
+    {
       accessorKey: 'nextMaintenanceDate',
       header: ({ column }) => {
         return (

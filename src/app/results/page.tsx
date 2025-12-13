@@ -119,7 +119,7 @@ export default function ResultsPage() {
         <div className="flex-1 space-y-6 p-4 md:p-6 pt-6 w-full overflow-x-auto">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight font-headline">Maintenance Results</h2>
+                    <h2 className="text-3xl font-bold tracking-tight font-headline">Maintenance History</h2>
                     <p className="text-muted-foreground">History of all completed maintenance and calibrations</p>
                 </div>
             </div>
@@ -190,10 +190,13 @@ export default function ResultsPage() {
                                                         </Badge>
                                                     )}
 
-                                                    {/* Date */}
+                                                    {/* Date & Time */}
                                                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                                         <Calendar className="w-4 h-4" />
-                                                        {new Date(result.completedDate).toLocaleDateString()}
+                                                        <div className="flex flex-col">
+                                                            <span>{new Date(result.completedDate).toLocaleDateString()}</span>
+                                                            <span className="text-xs">{new Date(result.completedDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        </div>
                                                     </div>
 
                                                     {/* Document */}
@@ -233,78 +236,113 @@ export default function ResultsPage() {
                                                                 )}
                                                             </div>
 
-                                                            <div className="rounded-lg border overflow-hidden">
-                                                                <table className="w-full text-sm">
-                                                                    <thead className="bg-muted/50">
-                                                                        <tr>
-                                                                            <th className="px-4 py-2 text-left font-medium">Label</th>
-                                                                            {section.type === 'tolerance' && <th className="px-4 py-2 text-left font-medium">Reference</th>}
-                                                                            {section.type === 'range' && (
-                                                                                <>
-                                                                                    <th className="px-4 py-2 text-left font-medium">Min</th>
-                                                                                    <th className="px-4 py-2 text-left font-medium">Max</th>
-                                                                                </>
-                                                                            )}
-                                                                            <th className="px-4 py-2 text-left font-medium">Measured</th>
-                                                                            {section.type === 'tolerance' && <th className="px-4 py-2 text-left font-medium">Error</th>}
-                                                                            <th className="px-4 py-2 text-center font-medium">Status</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {section.rows?.map((row, rowIndex) => (
-                                                                            <tr key={row.id || rowIndex} className="border-t">
-                                                                                <td className="px-4 py-2 font-medium">{row.label}</td>
-                                                                                {section.type === 'tolerance' && (
-                                                                                    <td className="px-4 py-2 text-muted-foreground">{row.reference} {row.unit || section.unit}</td>
-                                                                                )}
+                                                            {section.type === 'checklist' ? (
+                                                                <div className="space-y-2 rounded-lg border p-4 bg-muted/30">
+                                                                    {section.rows?.map((row, rowIndex) => (
+                                                                        <div key={row.id || rowIndex} className="flex items-center gap-2">
+                                                                            <Badge variant={row.passed ? 'default' : 'outline'}>
+                                                                                {row.passed ? <CheckCircle className="w-3 h-3 mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}
+                                                                                {row.passed ? 'Done' : 'Pending'}
+                                                                            </Badge>
+                                                                            <span className="text-sm">{row.label}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="rounded-lg border overflow-hidden">
+                                                                    <table className="w-full text-sm">
+                                                                        <thead className="bg-muted/50">
+                                                                            <tr>
+                                                                                <th className="px-4 py-2 text-left font-medium">Label</th>
+                                                                                {section.type === 'tolerance' && <th className="px-4 py-2 text-left font-medium">Reference</th>}
                                                                                 {section.type === 'range' && (
                                                                                     <>
-                                                                                        <td className="px-4 py-2 text-muted-foreground">{row.min ?? '-'}</td>
-                                                                                        <td className="px-4 py-2 text-muted-foreground">{row.max ?? '-'}</td>
+                                                                                        <th className="px-4 py-2 text-left font-medium">Min</th>
+                                                                                        <th className="px-4 py-2 text-left font-medium">Max</th>
                                                                                     </>
                                                                                 )}
-                                                                                <td className="px-4 py-2 font-mono">
-                                                                                    {row.measured !== undefined ? row.measured : '-'}
-                                                                                </td>
-                                                                                {section.type === 'tolerance' && (
-                                                                                    <td className={cn(
-                                                                                        "px-4 py-2 font-mono",
-                                                                                        row.error !== undefined && (row.passed ? "text-green-600" : "text-red-600")
-                                                                                    )}>
-                                                                                        {row.error !== undefined ? (row.error >= 0 ? '+' : '') + row.error.toFixed(3) : '-'}
-                                                                                    </td>
-                                                                                )}
-                                                                                <td className="px-4 py-2 text-center">
-                                                                                    {row.passed !== undefined ? (
-                                                                                        row.passed ? (
-                                                                                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                                                                                <CheckCircle className="w-3 h-3 mr-1" /> Pass
-                                                                                            </Badge>
-                                                                                        ) : (
-                                                                                            <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                                                                                <XCircle className="w-3 h-3 mr-1" /> Fail
-                                                                                            </Badge>
-                                                                                        )
-                                                                                    ) : '-'}
-                                                                                </td>
+                                                                                <th className="px-4 py-2 text-left font-medium">Measured</th>
+                                                                                {section.type === 'tolerance' && <th className="px-4 py-2 text-left font-medium">Error</th>}
+                                                                                <th className="px-4 py-2 text-center font-medium">Status</th>
                                                                             </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {section.rows?.map((row, rowIndex) => (
+                                                                                <tr key={row.id || rowIndex} className="border-t">
+                                                                                    <td className="px-4 py-2 font-medium">{row.label}</td>
+                                                                                    {section.type === 'tolerance' && (
+                                                                                        <td className="px-4 py-2 text-muted-foreground">{row.reference} {row.unit || section.unit}</td>
+                                                                                    )}
+                                                                                    {section.type === 'range' && (
+                                                                                        <>
+                                                                                            <td className="px-4 py-2 text-muted-foreground">{row.min ?? '-'}</td>
+                                                                                            <td className="px-4 py-2 text-muted-foreground">{row.max ?? '-'}</td>
+                                                                                        </>
+                                                                                    )}
+                                                                                    <td className="px-4 py-2 font-mono">
+                                                                                        {row.measured !== undefined ? row.measured : '-'}
+                                                                                    </td>
+                                                                                    {section.type === 'tolerance' && (
+                                                                                        <td className={cn(
+                                                                                            "px-4 py-2 font-mono",
+                                                                                            row.error !== undefined && (row.passed ? "text-green-600" : "text-red-600")
+                                                                                        )}>
+                                                                                            {row.error !== undefined ? (row.error >= 0 ? '+' : '') + row.error.toFixed(3) : '-'}
+                                                                                        </td>
+                                                                                    )}
+                                                                                    <td className="px-4 py-2 text-center">
+                                                                                        {row.passed !== undefined ? (
+                                                                                            row.passed ? (
+                                                                                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                                                                                    <CheckCircle className="w-3 h-3 mr-1" /> Pass
+                                                                                                </Badge>
+                                                                                            ) : (
+                                                                                                <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                                                                                    <XCircle className="w-3 h-3 mr-1" /> Fail
+                                                                                                </Badge>
+                                                                                            )
+                                                                                        ) : '-'}
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            )}
 
                                                             {/* Section Document Link */}
                                                             {section.documentUrl && (
                                                                 <div className="mt-2">
-                                                                    <a
-                                                                        href={section.documentUrl}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
-                                                                    >
-                                                                        <FileText className="w-4 h-4" />
-                                                                        View Test Document
-                                                                    </a>
+                                                                    <div className="text-sm font-medium mb-1">Test Document:</div>
+                                                                    {section.documentUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                                        <div className="space-y-2">
+                                                                            <img
+                                                                                src={section.documentUrl}
+                                                                                alt="Section document"
+                                                                                className="max-w-full h-auto rounded border"
+                                                                                style={{ maxHeight: '400px' }}
+                                                                            />
+                                                                            <a
+                                                                                href={section.documentUrl}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
+                                                                            >
+                                                                                <FileText className="w-4 h-4" />
+                                                                                View Full Image
+                                                                            </a>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <a
+                                                                            href={section.documentUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
+                                                                        >
+                                                                            <FileText className="w-4 h-4" />
+                                                                            View Test Document
+                                                                        </a>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -314,6 +352,42 @@ export default function ResultsPage() {
                                                         <div className="pt-2 border-t">
                                                             <span className="text-sm font-medium">Notes: </span>
                                                             <span className="text-sm text-muted-foreground">{result.notes}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Main Document Display */}
+                                                    {result.documentUrl && (
+                                                        <div className="pt-4 border-t">
+                                                            <div className="text-sm font-medium mb-2">Main Certificate/Report:</div>
+                                                            {result.documentUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                                                                <div className="space-y-2">
+                                                                    <img
+                                                                        src={result.documentUrl}
+                                                                        alt="Main result document"
+                                                                        className="max-w-full h-auto rounded border"
+                                                                        style={{ maxHeight: '500px' }}
+                                                                    />
+                                                                    <a
+                                                                        href={result.documentUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
+                                                                    >
+                                                                        <FileText className="w-4 h-4" />
+                                                                        View Full Image
+                                                                    </a>
+                                                                </div>
+                                                            ) : (
+                                                                <a
+                                                                    href={result.documentUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
+                                                                >
+                                                                    <FileText className="w-4 h-4" />
+                                                                    View Certificate/Report
+                                                                </a>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
