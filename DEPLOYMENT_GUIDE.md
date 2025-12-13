@@ -149,12 +149,15 @@ Click "Environment Variables" and add these:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://krsecnzwutwoduaflqii.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyc2Vjbnp3dXR3b2R1YWZscWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2Nzc2ODksImV4cCI6MjA4MDI1MzY4OX0.XSnmAPKansJwVIOkB_c0lbVnRZg0MzsmDlVvEcHWFhU
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_O5KLpaFMAx1Ri31EJu35rA_BV8XTtJR
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=<from Google Console>
 GOOGLE_CLIENT_SECRET=<from Google Console>
 ```
 
-**Important:** Set these for all environments (Production, Preview, Development)
+**Important:**
+- Set these for all environments (Production, Preview, Development)
+- Use the **Publishable key** (starts with `sb_publishable_`) NOT the Secret key
+- The Publishable key is safe to use in the browser and is protected by RLS
 
 ### 4.4 Deploy
 1. Click "Deploy"
