@@ -8,8 +8,8 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
 
 export const metadata: Metadata = {
-  title: 'LabTrack',
-  description: 'A maintenance tracker for clinical and pharma labs.',
+  title: 'Plan-PM',
+  description: 'A maintenance tracker for laboratory instruments.',
 };
 
 export default function RootLayout({

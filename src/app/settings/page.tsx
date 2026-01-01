@@ -17,7 +17,7 @@ export default function SettingsPage() {
     <div className="flex-1 space-y-6 p-4 md:p-6 pt-6 w-full">
       <div className="space-y-1">
         <h2 className="text-3xl font-bold tracking-tight font-headline">Settings</h2>
-        <p className="text-muted-foreground">Manage global options for LabTrack.</p>
+        <p className="text-muted-foreground">Manage global options for Plan-PM.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

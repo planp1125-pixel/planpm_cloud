@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { FlaskConical, Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
+import planpmLogo from '../../../../icons/planpm.png';
 import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
@@ -65,12 +67,18 @@ export default function LoginPage() {
             <Card className="w-full max-w-md relative z-10 border-border/50 shadow-2xl bg-card/95 backdrop-blur-sm">
                 <CardHeader className="text-center space-y-4 pb-2">
                     <div className="flex justify-center">
-                        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                            <FlaskConical className="w-9 h-9 text-primary" />
+                        <div className="w-20 h-20 flex items-center justify-center">
+                            <Image
+                                src={planpmLogo}
+                                alt="Plan-PM Logo"
+                                width={80}
+                                height={80}
+                                className="object-contain"
+                            />
                         </div>
                     </div>
                     <div>
-                        <CardTitle className="text-3xl font-bold font-headline">Welcome to LabTrack</CardTitle>
+                        <CardTitle className="text-3xl font-bold font-headline text-primary">Welcome to Plan-PM</CardTitle>
                         <CardDescription className="text-base mt-2">
                             Sign in to manage your laboratory instruments
                         </CardDescription>
