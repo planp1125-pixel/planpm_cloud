@@ -1,4 +1,4 @@
-# LabTrack Project Summary
+# Plan-PM Project Summary
 
 ## Stack
 - Next.js 15 App Router with Tailwind + Radix UI (shadcn-style components).

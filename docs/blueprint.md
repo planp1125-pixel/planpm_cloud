@@ -1,4 +1,4 @@
-# **App Name**: LabTrack
+# **App Name**: Plan-PM
 
 ## Core Features:
 

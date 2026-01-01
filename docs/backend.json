@@ -38,16 +38,27 @@
         "frequency": {
           "type": "string",
           "description": "Maintenance frequency for the instrument.",
-          "enum": ["Weekly", "Monthly", "3 Months", "6 Months", "1 Year"]
+          "enum": [
+            "Weekly",
+            "Monthly",
+            "3 Months",
+            "6 Months",
+            "1 Year"
+          ]
         },
         "status": {
-            "type": "string",
-            "description": "Maintenance status of the instrument.",
-            "enum": ["AMC", "PM", "Operational", "Out of Service"]
+          "type": "string",
+          "description": "Maintenance status of the instrument.",
+          "enum": [
+            "AMC",
+            "PM",
+            "Operational",
+            "Out of Service"
+          ]
         },
         "imageId": {
-            "type": "string",
-            "description": "ID for the placeholder instrument image."
+          "type": "string",
+          "description": "ID for the placeholder instrument image."
         }
       },
       "required": [
@@ -80,9 +91,13 @@
           "format": "date-time"
         },
         "type": {
-            "type": "string",
-            "description": "Type of maintenance.",
-            "enum": ["Calibration", "Preventative Maintenance", "Validation"]
+          "type": "string",
+          "description": "Type of maintenance.",
+          "enum": [
+            "Calibration",
+            "Preventative Maintenance",
+            "Validation"
+          ]
         },
         "description": {
           "type": "string",
@@ -195,7 +210,9 @@
           "description": "The name of the instrument type."
         }
       },
-      "required": ["name"]
+      "required": [
+        "name"
+      ]
     }
   },
   "auth": {
@@ -210,9 +227,16 @@
         "path": "/instrumentTypes/{instrumentTypeId}",
         "definition": {
           "entityName": "InstrumentType",
-          "schema": { "$ref": "#/backend/entities/InstrumentType" },
+          "schema": {
+            "$ref": "#/backend/entities/InstrumentType"
+          },
           "description": "Stores the list of available instrument types. Allows for dynamic population of dropdowns.",
-          "params": [{ "name": "instrumentTypeId", "description": "Unique ID for the instrument type." }]
+          "params": [
+            {
+              "name": "instrumentTypeId",
+              "description": "Unique ID for the instrument type."
+            }
+          ]
         }
       },
       {
@@ -308,6 +332,6 @@
         }
       }
     ],
-    "reasoning": "The Firestore data structure is designed to support the LabTrack application's core features, prioritizing authorization independence, clarity, and scalability. It uses a hierarchical path-based ownership for Instruments and their associated Maintenance Schedules and Records. This structure ensures that security rules can be written without relying on `get()` calls, thus enabling atomic operations and improving debuggability. The design incorporates denormalization where necessary to maintain authorization independence. The file storage will use Firebase Storage, but the metadata is stored in firestore. The structure uses homogeneous security postures by segregating data types into distinct collections, with each collection enforcing a consistent set of security rules. To support QAPs, the design leverages path-based ownership, allowing for efficient and secure listing of resources owned by a specific user/instrument. The Predictive Maintenance Advisor feature does not directly influence the database structure. The dashboard primarily uses the data present in these collections, so no special data structures are required. Role-based access control is implemented using a dedicated collection for admin roles, enabling secure management of application resources. A new 'instrumentTypes' collection is added to dynamically store and manage the list of instrument types, allowing users to add new types through the UI."
+    "reasoning": "The Firestore data structure is designed to support the Plan-PM application's core features, prioritizing authorization independence, clarity, and scalability. It uses a hierarchical path-based ownership for Instruments and their associated Maintenance Schedules and Records. This structure ensures that security rules can be written without relying on `get()` calls, thus enabling atomic operations and improving debuggability. The design incorporates denormalization where necessary to maintain authorization independence. The file storage will use Firebase Storage, but the metadata is stored in firestore. The structure uses homogeneous security postures by segregating data types into distinct collections, with each collection enforcing a consistent set of security rules. To support QAPs, the design leverages path-based ownership, allowing for efficient and secure listing of resources owned by a specific user/instrument. The Predictive Maintenance Advisor feature does not directly influence the database structure. The dashboard primarily uses the data present in these collections, so no special data structures are required. Role-based access control is implemented using a dedicated collection for admin roles, enabling secure management of application resources. A new 'instrumentTypes' collection is added to dynamically store and manage the list of instrument types, allowing users to add new types through the UI."
   }
 }
