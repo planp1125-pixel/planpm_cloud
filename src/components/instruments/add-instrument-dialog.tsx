@@ -23,6 +23,7 @@ import { CalendarIcon, Loader2, FlaskConical, Link, Plus, Trash2 } from 'lucide-
 import { cn } from '@/lib/utils';
 import { format, addWeeks, addMonths, addYears } from 'date-fns';
 import { supabase } from '@/lib/supabase';
+import { generateUUID } from '@/lib/uuid';
 import { useToast } from '@/hooks/use-toast';
 import type { MaintenanceFrequency, InstrumentType, TestTemplate } from '@/lib/types';
 import { Combobox } from '@/components/ui/combobox';
@@ -158,98 +159,102 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
   const onSubmit = async (values: AddInstrumentFormValues) => {
     setIsLoading(true);
 
-    // Use the first schedule for the main instrument record (legacy/display compatibility)
-    const primarySchedule = values.schedules[0];
-    const nextMaintenanceDate = getNextMaintenanceDate(primarySchedule.scheduleDate, primarySchedule.frequency as MaintenanceFrequency);
-    const imageId = instrumentTypeToImageId[values.instrumentType] || instrumentTypeToImageId.default;
+    try {
+      // Use the first schedule for the main instrument record (legacy/display compatibility)
+      const primarySchedule = values.schedules[0];
+      const nextMaintenanceDate = getNextMaintenanceDate(primarySchedule.scheduleDate, primarySchedule.frequency as MaintenanceFrequency);
+      const imageId = instrumentTypeToImageId[values.instrumentType] || instrumentTypeToImageId.default;
 
-    const instrumentId = crypto.randomUUID();
-    let uploadedImageUrl = '';
+      // Generate UUID using our utility
+      const instrumentId = generateUUID();
+      let uploadedImageUrl = '';
 
-    if (selectedImage) {
-      const fileExt = selectedImage.name.split('.').pop();
-      const fileName = `${instrumentId}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('instrument-images')
-        .upload(fileName, selectedImage, { cacheControl: '3600', upsert: true });
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from('instrument-images').getPublicUrl(fileName);
-        uploadedImageUrl = publicUrl;
+      if (selectedImage) {
+        const fileExt = selectedImage.name.split('.').pop();
+        const fileName = `${instrumentId}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('instrument-images')
+          .upload(fileName, selectedImage, { cacheControl: '3600', upsert: true });
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage.from('instrument-images').getPublicUrl(fileName);
+          uploadedImageUrl = publicUrl;
+        }
       }
-    }
 
-    // Prepare main instrument data
-    const newInstrumentData = {
-      id: instrumentId,
-      eqpId: values.eqpId,
-      instrumentType: values.instrumentType as InstrumentType,
-      make: values.make,
-      model: values.model,
-      serialNumber: values.serialNumber,
-      location: values.location,
-      user_id: user?.id,
-      // Legacy fields populated from first schedule
-      maintenanceType: primarySchedule.maintenanceType,
-      frequency: primarySchedule.frequency as MaintenanceFrequency,
-      scheduleDate: primarySchedule.scheduleDate.toISOString(),
-      nextMaintenanceDate: nextMaintenanceDate.toISOString(),
-      imageId: imageId,
-      imageUrl: uploadedImageUrl || '',
-      maintenanceBy: primarySchedule.maintenanceBy,
-      vendorName: primarySchedule.maintenanceBy === 'vendor' ? primarySchedule.vendorName || '' : null,
-      vendorContact: primarySchedule.maintenanceBy === 'vendor' ? primarySchedule.vendorContact || '' : null,
-    };
+      // Prepare main instrument data
+      const newInstrumentData = {
+        id: instrumentId,
+        eqpId: values.eqpId,
+        instrumentType: values.instrumentType as InstrumentType,
+        make: values.make,
+        model: values.model,
+        serialNumber: values.serialNumber,
+        location: values.location,
+        user_id: user?.id,
+        // Legacy fields populated from first schedule
+        maintenanceType: primarySchedule.maintenanceType,
+        frequency: primarySchedule.frequency as MaintenanceFrequency,
+        scheduleDate: primarySchedule.scheduleDate.toISOString(),
+        nextMaintenanceDate: nextMaintenanceDate.toISOString(),
+        imageId: imageId,
+        imageUrl: uploadedImageUrl || '',
+        maintenanceBy: primarySchedule.maintenanceBy,
+        vendorName: primarySchedule.maintenanceBy === 'vendor' ? primarySchedule.vendorName || '' : null,
+        vendorContact: primarySchedule.maintenanceBy === 'vendor' ? primarySchedule.vendorContact || '' : null,
+      };
 
-    if (!instrumentTypes.find(t => t.value.toLowerCase() === values.instrumentType.toLowerCase())) {
-      await addInstrumentType(values.instrumentType);
-    }
+      if (!instrumentTypes.find(t => t.value.toLowerCase() === values.instrumentType.toLowerCase())) {
+        await addInstrumentType(values.instrumentType);
+      }
 
-    // Insert Instrument
-    const { error: instError } = await supabase.from('instruments').insert(newInstrumentData);
+      // Insert Instrument
+      const { error: instError } = await supabase.from('instruments').insert(newInstrumentData);
 
-    if (instError) {
-      console.error('Insert error:', instError);
-      toast({ title: 'Error', description: instError.message || 'Failed to add instrument.', variant: 'destructive' });
+      if (instError) {
+        console.error('Insert error:', instError);
+        toast({ title: 'Error', description: instError.message || 'Failed to add instrument.', variant: 'destructive' });
+        return;
+      }
+
+      // Insert Maintenance Schedules
+      const scheduleInserts = values.schedules.map(schedule => ({
+        instrument_id: instrumentId,
+        maintenance_type: schedule.maintenanceType,
+        frequency: schedule.frequency,
+        schedule_date: schedule.scheduleDate.toISOString(),
+        template_id: schedule.templateId || null,
+        user_id: user?.id,
+        maintenanceBy: schedule.maintenanceBy,
+        vendorName: schedule.maintenanceBy === 'vendor' ? schedule.vendorName || '' : null,
+        vendorContact: schedule.maintenanceBy === 'vendor' ? schedule.vendorContact || '' : null,
+      }));
+
+      const { error: configError } = await supabase.from('maintenance_configurations').insert(scheduleInserts);
+
+      if (configError) {
+        console.error('Config insert error:', configError);
+        toast({ title: 'Warning', description: 'Instrument added but failed to save schedules detailed config.' });
+      }
+
+      // Ensure types exist
+      for (const schedule of values.schedules) {
+        if (!maintenanceTypes.find(t => t.value.toLowerCase() === schedule.maintenanceType.toLowerCase())) {
+          await addMaintenanceType(schedule.maintenanceType);
+        }
+      }
+
+      toast({ title: 'Instrument Added', description: `${values.eqpId} has been added.` });
+      form.reset();
+      setSelectedImage(null);
+      setImagePreviewUrl('');
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast({ title: 'Error', description: 'An unexpected error occurred.', variant: 'destructive' });
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    // Insert Maintenance Schedules
-    const scheduleInserts = values.schedules.map(schedule => ({
-      instrument_id: instrumentId,
-      maintenance_type: schedule.maintenanceType,
-      frequency: schedule.frequency,
-      schedule_date: schedule.scheduleDate.toISOString(),
-      template_id: schedule.templateId || null,
-      user_id: user?.id,
-      maintenanceBy: schedule.maintenanceBy,
-      vendorName: schedule.maintenanceBy === 'vendor' ? schedule.vendorName || '' : null,
-      vendorContact: schedule.maintenanceBy === 'vendor' ? schedule.vendorContact || '' : null,
-    }));
-
-    const { error: configError } = await supabase.from('maintenance_configurations').insert(scheduleInserts);
-
-    if (configError) {
-      console.error('Config insert error:', configError);
-      // We don't block success if only configs fail, but ideally we should.
-      // For now warning is enough as it's a new feature.
-      toast({ title: 'Warning', description: 'Instrument added but failed to save schedules detailed config. DB table might be missing.' });
-    }
-
-    // Ensure types exist
-    for (const schedule of values.schedules) {
-      if (!maintenanceTypes.find(t => t.value.toLowerCase() === schedule.maintenanceType.toLowerCase())) {
-        await addMaintenanceType(schedule.maintenanceType);
-      }
-    }
-
-    toast({ title: 'Instrument Added', description: `${values.eqpId} has been added.` });
-    form.reset();
-    setSelectedImage(null);
-    setImagePreviewUrl('');
-    onOpenChange(false);
-    onSuccess?.();
-    setIsLoading(false);
   };
 
   return (
@@ -283,13 +288,18 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Instrument Type</FormLabel>
-                    <Combobox
-                      options={instrumentTypes}
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Select or type..."
-                      loading={isLoadingTypes}
-                    />
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select instrument type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {instrumentTypes.map(type => (
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -380,13 +390,18 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
                         render={({ field }) => (
                           <FormItem className="flex flex-col">
                             <FormLabel>Maintenance Type</FormLabel>
-                            <Combobox
-                              options={maintenanceTypes}
-                              value={field.value}
-                              onChange={field.onChange}
-                              placeholder="Select or type..."
-                              loading={isLoadingMaintTypes}
-                            />
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select maintenance type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {maintenanceTypes.map(type => (
+                                  <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -439,15 +454,15 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
                         <FormField
                           control={form.control}
                           name={`schedules.${index}.vendorName`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Vendor Name</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Vendor company or contact" autoComplete="off" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Vendor Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Vendor company or contact" autoComplete="off" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
                       )}
                     </div>
@@ -478,7 +493,13 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
                         render={({ field }) => (
                           <FormItem className="flex flex-col">
                             <FormLabel>Schedule Start Date</FormLabel>
-                            <DatePicker value={field.value} onChange={field.onChange} />
+                            <FormControl>
+                              <Input
+                                type="date"
+                                value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
+                                onChange={(e) => field.onChange(new Date(e.target.value))}
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}

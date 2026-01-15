@@ -1,38 +1,71 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { FlaskConical, Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import Link from 'next/link';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, User, Lock, Eye, EyeOff, Shield, Users } from 'lucide-react';
 import Image from 'next/image';
 import planpmLogo from '../../../../icons/planpm.png';
 import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
-    const { signInWithGoogle, signInWithEmail, isLoading: authLoading } = useAuth();
-    const [email, setEmail] = useState('');
+    const { signInWithEmail, isLoading: authLoading } = useAuth();
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [isLookingUpRole, setIsLookingUpRole] = useState(false);
     const { toast } = useToast();
 
-    const handleEmailLogin = async (e: React.FormEvent) => {
+    // Lookup user role when username changes
+    useEffect(() => {
+        const lookupRole = async () => {
+            if (!username.trim()) {
+                setUserRole(null);
+                return;
+            }
+            setIsLookingUpRole(true);
+            try {
+                const res = await fetch(`/api/user-role?username=${encodeURIComponent(username.trim())}`);
+                const data = await res.json();
+                if (data.found) {
+                    setUserRole(data.role);
+                } else {
+                    setUserRole(null);
+                }
+            } catch {
+                setUserRole(null);
+            } finally {
+                setIsLookingUpRole(false);
+            }
+        };
+
+        const debounce = setTimeout(lookupRole, 500);
+        return () => clearTimeout(debounce);
+    }, [username]);
+
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email || !password) {
+        if (!username || !password) {
             toast({
                 title: 'Error',
-                description: 'Please enter both email and password',
+                description: 'Please enter both username and password',
                 variant: 'destructive',
             });
             return;
         }
 
         setIsLoading(true);
+        // Convert username to internal email format
+        const email = username.includes('@')
+            ? username
+            : `${username.toLowerCase().replace(/\s+/g, '_')}@planpm.local`;
+
         const { error } = await signInWithEmail(email, password);
         if (error) {
             toast({
@@ -44,8 +77,16 @@ export default function LoginPage() {
         setIsLoading(false);
     };
 
-    const handleGoogleLogin = async () => {
-        await signInWithGoogle();
+    const getRoleBadge = () => {
+        if (!userRole) return null;
+        switch (userRole) {
+            case 'admin':
+                return <Badge className="bg-red-600 text-white ml-2"><Shield className="w-3 h-3 mr-1" />Admin</Badge>;
+            case 'supervisor':
+                return <Badge className="bg-blue-600 text-white ml-2"><Users className="w-3 h-3 mr-1" />Supervisor</Badge>;
+            default:
+                return <Badge className="bg-gray-600 text-white ml-2"><User className="w-3 h-3 mr-1" />User</Badge>;
+        }
     };
 
     if (authLoading) {
@@ -86,7 +127,8 @@ export default function LoginPage() {
                 </CardHeader>
 
                 <CardContent className="space-y-6 pt-4">
-                    {/* Google Sign In */}
+                    {/* Google Sign In - Hidden for Local Deployment */}
+                    {/*
                     <Button
                         variant="outline"
                         className="w-full h-12 text-base font-medium border-2 hover:bg-muted/50 transition-all"
@@ -122,23 +164,30 @@ export default function LoginPage() {
                             <span className="bg-card px-3 text-muted-foreground">Or continue with email</span>
                         </div>
                     </div>
+                    */}
 
-                    {/* Email Sign In Form */}
-                    <form onSubmit={handleEmailLogin} className="space-y-4">
+                    {/* Username Sign In Form */}
+                    <form onSubmit={handleLogin} className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="email" className="text-sm font-medium">
-                                Email
-                            </Label>
+                            <div className="flex items-center">
+                                <Label htmlFor="username" className="text-sm font-medium">
+                                    Username
+                                </Label>
+                                {isLookingUpRole && <Loader2 className="w-3 h-3 ml-2 animate-spin text-muted-foreground" />}
+                                {getRoleBadge()}
+                            </div>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="your@email.com"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    id="username"
+                                    name="plan_username"
+                                    type="text"
+                                    placeholder="Enter your username"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
                                     className="pl-10 h-11"
                                     disabled={isLoading}
+                                    autoComplete="off"
                                 />
                             </div>
                         </div>
@@ -151,12 +200,14 @@ export default function LoginPage() {
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     id="password"
+                                    name="plan_password"
                                     type={showPassword ? 'text' : 'password'}
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="pl-10 pr-10 h-11"
                                     disabled={isLoading}
+                                    autoComplete="new-password"
                                 />
                                 <button
                                     type="button"
@@ -181,10 +232,7 @@ export default function LoginPage() {
                     </form>
 
                     <div className="text-center text-sm text-muted-foreground">
-                        Don't have an account?{' '}
-                        <Link href="/signup" className="text-primary hover:underline font-medium">
-                            Sign up
-                        </Link>
+                        Contact your administrator if you need an account.
                     </div>
                 </CardContent>
             </Card>

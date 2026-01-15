@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, LayoutDashboard, Wrench, ClipboardList, Settings, PanelLeft, FileText } from 'lucide-react';
+import { LayoutDashboard, Wrench, ClipboardList, Settings, PanelLeft, FileText, Users } from 'lucide-react';
 import Image from 'next/image';
 import planpmLogo from '../../../icons/planpm.png';
 import {
@@ -11,23 +11,37 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarFooter,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { useAuth, UserPermissions } from '@/contexts/auth-context';
 
-const menuItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/instruments', label: 'Instruments', icon: Wrench },
-  { href: '/results', label: 'Maintenance History', icon: ClipboardList },
-  { href: '/design-results', label: 'Templates', icon: FileText },
-  { href: '/advisor', label: 'Predictive Advisor', icon: Bot },
-  { href: '/settings', label: 'Settings', icon: Settings },
+interface MenuItem {
+  href: string;
+  label: string;
+  icon: any;
+  permission?: keyof UserPermissions;
+}
+
+const menuItems: MenuItem[] = [
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard' },
+  { href: '/instruments', label: 'Instruments', icon: Wrench, permission: 'instruments' },
+  { href: '/results', label: 'Maintenance History', icon: ClipboardList, permission: 'maintenance_history' },
+  { href: '/design-results', label: 'Templates', icon: FileText, permission: 'design_templates' },
+  { href: '/settings', label: 'Settings', icon: Settings, permission: 'settings' },
+  { href: '/user-management', label: 'User Management', icon: Users, permission: 'user_management' },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { open, toggleSidebar } = useSidebar();
+  const { hasPermission } = useAuth();
+
+  // Filter menu items based on user permissions
+  const visibleMenuItems = menuItems.filter(item => {
+    if (!item.permission) return true;
+    return hasPermission(item.permission, 'view');
+  });
 
   return (
     <Sidebar className="border-r">
@@ -52,7 +66,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarMenu className="flex-1 px-3 py-4">
-        {menuItems.map((item) => (
+        {visibleMenuItems.map((item) => (
           <SidebarMenuItem key={item.href}>
             <Link href={item.href}>
               <SidebarMenuButton

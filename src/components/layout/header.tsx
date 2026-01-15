@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, LogOut, Settings, User } from 'lucide-react';
+import { Bell, LogOut, Settings, User, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,28 +11,43 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/contexts/auth-context';
 import Link from 'next/link';
 
 export function Header() {
-  const { user, signOut, isLoading } = useAuth();
+  const { user, signOut, isLoading, displayName, isAdmin, permissions } = useAuth();
 
-  // Get initials from email or name
+  // Get initials from display name
   const getInitials = () => {
-    if (!user) return 'U';
-    const name = user.user_metadata?.full_name || user.email;
-    if (!name) return 'U';
-    const parts = name.split(' ');
+    if (!displayName) return 'U';
+    const parts = displayName.split(' ');
     if (parts.length >= 2) {
       return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     }
-    return name.substring(0, 2).toUpperCase();
+    return displayName.substring(0, 2).toUpperCase();
   };
 
-  const getDisplayName = () => {
-    if (!user) return 'User';
-    return user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
+  // Determine role for display
+  const getUserRole = () => {
+    if (isAdmin) return 'admin';
+    // Check permissions to infer role (supervisor has more permissions than user)
+    const editCount = Object.values(permissions || {}).filter(v => v === 'edit').length;
+    if (editCount >= 3) return 'supervisor';
+    return 'user';
+  };
+
+  const getRoleBadge = () => {
+    const role = getUserRole();
+    switch (role) {
+      case 'admin':
+        return <Badge className="bg-red-600 text-white text-xs"><Shield className="w-3 h-3 mr-1" />Admin</Badge>;
+      case 'supervisor':
+        return <Badge className="bg-blue-600 text-white text-xs"><Users className="w-3 h-3 mr-1" />Supervisor</Badge>;
+      default:
+        return <Badge className="bg-gray-600 text-white text-xs"><User className="w-3 h-3 mr-1" />User</Badge>;
+    }
   };
 
   return (
@@ -51,7 +66,7 @@ export function Header() {
                 <Avatar>
                   <AvatarImage
                     src={user.user_metadata?.avatar_url || user.user_metadata?.picture}
-                    alt={getDisplayName()}
+                    alt={displayName || 'User'}
                   />
                   <AvatarFallback className="bg-primary/10 text-primary font-medium">
                     {getInitials()}
@@ -63,8 +78,10 @@ export function Header() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{getDisplayName()}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium leading-none">{displayName || 'User'}</p>
+                    {getRoleBadge()}
+                  </div>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

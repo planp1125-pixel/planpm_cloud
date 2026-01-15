@@ -175,8 +175,8 @@ export default function ResultsPage() {
               ${section.type === 'tolerance' ? `<div style="font-size:12px;">±${section.tolerance} ${section.unit || ''}</div>` : ''}
             </div>
             ${section.type === 'checklist'
-              ? `<ul style="margin:8px 0;padding-left:16px;">${section.rows?.map(row => `<li>${row.label} — ${row.passed ? 'Done' : 'Pending'}</li>`).join('') || ''}</ul>`
-              : renderSectionRows(section)}
+                ? `<ul style="margin:8px 0;padding-left:16px;">${section.rows?.map(row => `<li>${row.label} — ${row.passed ? 'Done' : 'Pending'}</li>`).join('') || ''}</ul>`
+                : renderSectionRows(section)}
           </div>
         `).join('');
 
@@ -201,16 +201,24 @@ export default function ResultsPage() {
               ${r.scheduleDescription ? `<div class="block">Description: ${r.scheduleDescription}</div>` : ''}
               ${r.notes ? `<div class="block">Notes: ${r.notes}</div>` : ''}
               ${sections}
+              <script>
+                // Auto-print when the page loads, but don't block parent window
+                window.onload = function() {
+                  setTimeout(function() { 
+                    window.print(); 
+                  }, 100);
+                };
+              </script>
             </body>
           </html>
         `;
 
+        // Open a new window and write the HTML - don't call print() from parent window
         const win = window.open('', '_blank');
         if (!win) return;
         win.document.write(html);
         win.document.close();
-        win.focus();
-        win.print();
+        // DON'T call win.focus() or win.print() from here - let the popup handle it
     };
 
     return (

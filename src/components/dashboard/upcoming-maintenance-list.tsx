@@ -339,9 +339,18 @@ export function UpcomingMaintenanceList() {
           dedupedMap.set(key, event);
           return;
         }
-        // If both real, prefer the one with completion info
+        // If both real, prefer the one with result data (hasResult) or better status
         if (!isVirtual && !existingVirtual) {
-          if ((event.completedDate && !existing.completedDate) || (event.maintenanceStatus === 'Completed' && existing.maintenanceStatus !== 'Completed')) {
+          // Priority: Completed > Partially Completed > (has result data) > Pending/Overdue
+          const statusPriority = (status: MaintenanceStatus, hasResult: boolean | undefined) => {
+            if (status === 'Completed') return 4;
+            if (status === 'Partially Completed') return 3;
+            if (hasResult) return 2;
+            return 1;
+          };
+          const eventPriority = statusPriority(event.maintenanceStatus, event.hasResult);
+          const existingPriority = statusPriority(existing.maintenanceStatus, existing.hasResult);
+          if (eventPriority > existingPriority) {
             dedupedMap.set(key, event);
           }
         }

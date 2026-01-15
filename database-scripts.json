@@ -1,0 +1,10 @@
+{
+    "scripts": {
+        "db:setup": "cd database && docker-compose up -d && cd .. && npx prisma generate && npx prisma db push",
+        "db:start": "cd database && docker-compose up -d",
+        "db:stop": "cd database && docker-compose down",
+        "db:reset": "npx prisma db push --force-reset",
+        "db:studio": "npx prisma studio",
+        "prisma:generate": "npx prisma generate"
+    }
+}

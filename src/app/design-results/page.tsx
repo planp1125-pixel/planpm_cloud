@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useForm, useFieldArray, Control, UseFormRegister } from 'react-hook-form';
 import { supabase } from '@/lib/supabase';
+import { generateUUID } from '@/lib/uuid';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,12 +91,12 @@ export default function DesignResultsPage() {
             name: '',
             description: '',
             sections: [{
-                id: crypto.randomUUID(),
+                id: generateUUID(),
                 title: 'New Section',
                 type: 'tolerance',
                 tolerance: 0,
                 unit: '',
-                rows: [{ id: crypto.randomUUID(), label: 'Reading 1', reference: 0 }]
+                rows: [{ id: generateUUID(), label: 'Reading 1', reference: 0 }]
             }]
         });
         setEditingId(null);
@@ -131,46 +132,52 @@ export default function DesignResultsPage() {
     const onSubmit = async (values: FormValues) => {
         setIsLoading(true);
 
-        const templateData = {
-            name: values.name,
-            description: values.description,
-            structure: values.sections
-        };
+        try {
+            const templateData = {
+                name: values.name,
+                description: values.description,
+                structure: values.sections
+            };
 
-        let error;
-        if (editingId) {
-            const { error: updateError } = await supabase
-                .from('testTemplates')
-                .update(templateData)
-                .eq('id', editingId);
-            error = updateError;
-        } else {
-            const { error: insertError } = await supabase
-                .from('testTemplates')
-                .insert(templateData);
-            error = insertError;
-        }
+            let error;
+            if (editingId) {
+                const { error: updateError } = await supabase
+                    .from('testTemplates')
+                    .update(templateData)
+                    .eq('id', editingId);
+                error = updateError;
+            } else {
+                const { error: insertError } = await supabase
+                    .from('testTemplates')
+                    .insert(templateData);
+                error = insertError;
+            }
 
-        if (error) {
-            console.error('Error saving template:', error);
-            toast({ title: 'Error', description: 'Failed to save template', variant: 'destructive' });
-        } else {
-            toast({ title: 'Success', description: 'Template saved successfully' });
-            setIsEditing(false);
-            fetchTemplates();
+            if (error) {
+                console.error('Error saving template:', error);
+                toast({ title: 'Error', description: error.message || 'Failed to save template', variant: 'destructive' });
+            } else {
+                toast({ title: 'Success', description: 'Template saved successfully' });
+                setIsEditing(false);
+                fetchTemplates();
+            }
+        } catch (err) {
+            console.error('Unexpected error saving template:', err);
+            toast({ title: 'Error', description: 'An unexpected error occurred', variant: 'destructive' });
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     const addNewSection = (type: TemplateSectionType) => {
         appendSection({
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             title: '',
             type: type,
             tolerance: type === 'tolerance' ? 0.1 : undefined,
             unit: '',
             rows: [{
-                id: crypto.randomUUID(),
+                id: generateUUID(),
                 label: type === 'checklist' ? 'Checklist item 1' : 'Row 1',
                 reference: type === 'tolerance' ? 0 : undefined
             }]
@@ -370,10 +377,10 @@ function SectionEditor({
     setValue: any;
     onRemove: () => void;
 }) {
-        const { fields: rowFields, append: appendRow, remove: removeRow } = useFieldArray({
-            control,
-            name: `sections.${index}.rows`
-        });
+    const { fields: rowFields, append: appendRow, remove: removeRow } = useFieldArray({
+        control,
+        name: `sections.${index}.rows`
+    });
 
     const sectionType = watch(`sections.${index}.type`) as TemplateSectionType;
 
@@ -405,24 +412,24 @@ function SectionEditor({
 
             <CardContent className="space-y-4">
                 {/* Section Settings */}
-                    <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
-                        <div className="space-y-1">
-                            <Label className="text-xs">Section Type</Label>
-                            <Select
-                                value={sectionType}
-                                onValueChange={(value) => setValue(`sections.${index}.type`, value)}
-                            >
-                                <SelectTrigger className="h-8">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="tolerance">Tolerance (±value)</SelectItem>
-                                    <SelectItem value="range">Range (min-max)</SelectItem>
-                                    <SelectItem value="simple">Simple (no limits)</SelectItem>
-                                    <SelectItem value="checklist">Checklist</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
+                    <div className="space-y-1">
+                        <Label className="text-xs">Section Type</Label>
+                        <Select
+                            value={sectionType}
+                            onValueChange={(value) => setValue(`sections.${index}.type`, value)}
+                        >
+                            <SelectTrigger className="h-8">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="tolerance">Tolerance (±value)</SelectItem>
+                                <SelectItem value="range">Range (min-max)</SelectItem>
+                                <SelectItem value="simple">Simple (no limits)</SelectItem>
+                                <SelectItem value="checklist">Checklist</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
                     {sectionType === 'tolerance' && (
                         <div className="space-y-1">
@@ -574,7 +581,7 @@ function SectionEditor({
                     size="sm"
                     className="w-full border-dashed"
                     onClick={() => appendRow({
-                        id: crypto.randomUUID(),
+                        id: generateUUID(),
                         label: sectionType === 'checklist' ? `Checklist item ${rowFields.length + 1}` : `Reading ${rowFields.length + 1}`,
                         reference: sectionType === 'tolerance' ? 0 : undefined,
                         unit: sectionType === 'checklist' ? undefined : ''

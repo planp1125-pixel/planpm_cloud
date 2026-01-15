@@ -6,12 +6,18 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/auth-context';
 import { MaintenanceTypeCards } from './maintenance-type-cards';
 import { differenceInDays, addDays, addWeeks, addMonths, addYears } from 'date-fns';
-import type { MaintenanceEvent, Instrument, MaintenanceConfiguration, MaintenanceFrequency } from '@/lib/types';
+import type { MaintenanceEvent, Instrument, MaintenanceConfiguration, MaintenanceFrequency, MaintenanceTaskType } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
 
 type MaintenanceStatus = 'Completed' | 'Pending' | 'Partially Completed' | 'Overdue';
 
 interface EnhancedEvent extends MaintenanceEvent {
+  configId?: string;
+  instrumentName?: string;
+  instrumentType?: string;
+  location?: string;
+  daysLeft?: number;
+  template?: string | null;
   maintenanceStatus: MaintenanceStatus;
   totalSections?: number;
   completedSections?: number;
@@ -97,10 +103,12 @@ export function MaintenanceSummary() {
           id: `${config.id}-${currentDate.toISOString()}`,
           configId: config.id,
           instrumentId: instrument.id,
-          instrumentName: instrument.name,
+          instrumentName: instrument.eqpId,  // Fixed: using eqpId instead of name
           instrumentType: instrument.instrumentType,
           location: instrument.location,
-          type: config.maintenance_type,
+          type: config.maintenance_type as MaintenanceTaskType,
+          description: `${config.maintenance_type} - ${config.frequency}`,
+          status: daysUntil < 0 ? 'Overdue' : 'Scheduled' as const,
           frequency: config.frequency,
           dueDate: currentDate.toISOString(),
           daysLeft: daysUntil,
@@ -128,7 +136,7 @@ export function MaintenanceSummary() {
         <div className="sticky top-0 z-10 bg-background pb-4">
           <MaintenanceTypeCards
             schedules={upcomingSchedules}
-            onTypeClick={() => {}}
+            onTypeClick={() => { }}
             selectedType={undefined}
           />
         </div>

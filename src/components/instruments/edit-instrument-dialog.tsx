@@ -155,91 +155,100 @@ export function EditInstrumentDialog({ isOpen, onOpenChange, instrument, onSucce
   const onSubmit = async (values: EditInstrumentFormValues) => {
     setIsLoading(true);
 
-    const nextMaintenanceDate = getNextMaintenanceDate(values.scheduleDate, values.frequency as MaintenanceFrequency);
-    const imageId = instrumentTypeToImageId[values.instrumentType] || instrumentTypeToImageId.default;
+    try {
+      const nextMaintenanceDate = getNextMaintenanceDate(values.scheduleDate, values.frequency as MaintenanceFrequency);
+      const imageId = instrumentTypeToImageId[values.instrumentType] || instrumentTypeToImageId.default;
 
-    let uploadedImageUrl = instrument.imageUrl || '';
+      let uploadedImageUrl = instrument.imageUrl || '';
 
-    // Upload new image to Supabase Storage if a new image is selected
-    if (selectedImage) {
-      // Delete old image if exists
-      if (instrument.imageUrl) {
-        const oldFileName = instrument.imageUrl.split('/').pop();
-        if (oldFileName) {
-          await supabase.storage.from('instrument-images').remove([oldFileName]);
+      // Upload new image to Supabase Storage if a new image is selected
+      if (selectedImage) {
+        // Delete old image if exists
+        if (instrument.imageUrl) {
+          const oldFileName = instrument.imageUrl.split('/').pop();
+          if (oldFileName) {
+            await supabase.storage.from('instrument-images').remove([oldFileName]);
+          }
         }
+
+        const fileExt = selectedImage.name.split('.').pop();
+        const fileName = `${instrument.id}_${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('instrument-images')
+          .upload(fileName, selectedImage, {
+            cacheControl: '3600',
+            upsert: true
+          });
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          toast({
+            title: 'Upload Error',
+            description: 'Failed to upload image. Please try again.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('instrument-images')
+          .getPublicUrl(fileName);
+
+        uploadedImageUrl = publicUrl;
       }
 
-      const fileExt = selectedImage.name.split('.').pop();
-      const fileName = `${instrument.id}_${Date.now()}.${fileExt}`;
+      const updatedInstrumentData = {
+        ...values,
+        maintenanceType: values.maintenanceType,
+        instrumentType: values.instrumentType as InstrumentType,
+        frequency: values.frequency as MaintenanceFrequency,
+        scheduleDate: values.scheduleDate.toISOString(),
+        nextMaintenanceDate: nextMaintenanceDate.toISOString(),
+        imageId: imageId,
+        imageUrl: uploadedImageUrl,
+        maintenanceBy: values.maintenanceBy,
+        vendorName: values.maintenanceBy === 'vendor' ? values.vendorName || '' : null,
+        vendorContact: values.maintenanceBy === 'vendor' ? values.vendorContact || '' : null,
+      };
 
-      const { error: uploadError } = await supabase.storage
-        .from('instrument-images')
-        .upload(fileName, selectedImage, {
-          cacheControl: '3600',
-          upsert: true
-        });
+      if (!instrumentTypes.find(t => t.value.toLowerCase() === values.instrumentType.toLowerCase())) {
+        await addInstrumentType(values.instrumentType);
+      }
+      if (!maintenanceTypes.find(t => t.value.toLowerCase() === values.maintenanceType.toLowerCase())) {
+        await addMaintenanceType(values.maintenanceType);
+      }
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
+      const { error } = await supabase.from('instruments').update(updatedInstrumentData).eq('id', instrument.id);
+
+      if (error) {
+        console.error('Error updating instrument:', error);
         toast({
-          title: 'Upload Error',
-          description: 'Failed to upload image. Please try again.',
+          title: 'Error',
+          description: 'Failed to update instrument.',
           variant: 'destructive',
         });
-        setIsLoading(false);
-        return;
+      } else {
+        toast({
+          title: 'Instrument Updated',
+          description: `${values.eqpId} has been updated successfully.`,
+        });
+        setSelectedImage(null);
+        setImagePreviewUrl('');
+        onOpenChange(false);
+        onSuccess?.();
       }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('instrument-images')
-        .getPublicUrl(fileName);
-
-      uploadedImageUrl = publicUrl;
-    }
-
-    const updatedInstrumentData = {
-      ...values,
-      maintenanceType: values.maintenanceType,
-      instrumentType: values.instrumentType as InstrumentType,
-      frequency: values.frequency as MaintenanceFrequency,
-      scheduleDate: values.scheduleDate.toISOString(),
-      nextMaintenanceDate: nextMaintenanceDate.toISOString(),
-      imageId: imageId,
-      imageUrl: uploadedImageUrl,
-      maintenanceBy: values.maintenanceBy,
-      vendorName: values.maintenanceBy === 'vendor' ? values.vendorName || '' : null,
-      vendorContact: values.maintenanceBy === 'vendor' ? values.vendorContact || '' : null,
-    };
-
-    if (!instrumentTypes.find(t => t.value.toLowerCase() === values.instrumentType.toLowerCase())) {
-      await addInstrumentType(values.instrumentType);
-    }
-    if (!maintenanceTypes.find(t => t.value.toLowerCase() === values.maintenanceType.toLowerCase())) {
-      await addMaintenanceType(values.maintenanceType);
-    }
-
-    const { error } = await supabase.from('instruments').update(updatedInstrumentData).eq('id', instrument.id);
-
-    if (error) {
-      console.error('Error updating instrument:', error);
+    } catch (err) {
+      console.error('Unexpected error:', err);
       toast({
         title: 'Error',
-        description: 'Failed to update instrument.',
+        description: 'An unexpected error occurred.',
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Instrument Updated',
-        description: `${values.eqpId} has been updated successfully.`,
-      });
-      setSelectedImage(null);
-      setImagePreviewUrl('');
-      onOpenChange(false);
-      onSuccess?.();
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
