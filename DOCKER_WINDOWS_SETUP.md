@@ -1,153 +1,88 @@
-# Docker Development Setup for Windows
+# Docker Windows Deployment Guide
 
-## Requirements
+This guide explains how to deploy Plan-PM locally on Windows using Docker.
 
-| Software | Version | Purpose |
-|----------|---------|---------|
-| **Docker Desktop** | Latest | Container runtime |
-| **WSL 2** | - | Linux subsystem (installed with Docker Desktop) |
-| **Git** | Latest | Source control |
+## 📋 Prerequisites (Factory Server)
 
----
+To run this application on the factory server, you **ONLY** need:
 
-## Quick Start
+1.  **Docker Desktop** (latest version recommended)
+    *   Download: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+    *   *Note:* Enable "WSL 2" during installation if asked.
 
-### 1. Install Docker Desktop
-Download from: https://www.docker.com/products/docker-desktop/
+**You do NOT need:**
+*   ❌ Node.js / npm (The Docker container handles this internally)
+*   ❌ Python, PHP, or other runtimes
 
-> **Important:** During installation, enable **WSL 2 backend** (recommended for Windows)
-
-### 2. Clone the Repository
-```powershell
-git clone https://github.com/planp1125-pixel/planpm_local.git
-cd planpm_local
-```
-
-### 3. Create Environment File
-```powershell
-copy env.docker.example .env
-```
-
-Edit `.env` with your keys if needed (demo keys work for local development).
-
-### 4. Start All Services
-```powershell
-docker-compose -f docker-compose.dev.yml up --build
-```
-
-### 5. Access the Application
-- **App:** http://localhost:9002
-- **Supabase API:** http://localhost:54321
-- **Database:** localhost:54322
+**Internet Access:**
+*   The server needs internet access **only for the first run** to download the Docker images (approx. 1-2 GB).
+*   After the first run, it can operate completely offline.
 
 ---
 
-## Services Overview
+## 🚀 Quick Start (Recommended)
 
+We have created verified one-click deployment scripts that handle everything for you: starting containers, waiting for services, and creating the admin user.
+
+### 1. Run the Deployment Script
+Double-click **`deploy.bat`** in the project root folder.
+
+*Alternatively, running from PowerShell:*
+```powershell
+.\deploy.ps1
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Docker Network                        │
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
-│  │  Next.js App │  │ Supabase DB  │  │ Supabase Auth│   │
-│  │  Port: 9002  │  │ Port: 54322  │  │ Port: 54321  │   │
-│  └──────────────┘  └──────────────┘  └──────────────┘   │
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐                     │
-│  │ Supabase REST│  │   Storage    │                     │
-│  │ Port: 54323  │  │ Port: 54324  │                     │
-│  └──────────────┘  └──────────────┘                     │
-└─────────────────────────────────────────────────────────┘
-```
+
+### 2. Login
+The script will automatically open the app in your browser.
+*   **URL:** [http://localhost:9002](http://localhost:9002)
+*   **Username:** `admin`
+*   **Password:** `Admin@123*`
 
 ---
 
-## Useful Commands
+## 🛠 Manual Deployment (Advanced)
 
-### Start in Background
-```powershell
-docker-compose -f docker-compose.dev.yml up -d
-```
+If you prefer to run the steps manually, here is what the script does:
 
-### View Logs
-```powershell
-docker-compose -f docker-compose.dev.yml logs -f app
-```
+1.  **Start Services**:
+    ```powershell
+    docker-compose -f docker-compose.prod.yml --env-file .env.docker up -d
+    ```
 
-### Stop All Services
-```powershell
-docker-compose -f docker-compose.dev.yml down
-```
-
-### Rebuild After Code Changes
-```powershell
-docker-compose -f docker-compose.dev.yml up --build
-```
-
-### Reset Database
-```powershell
-docker-compose -f docker-compose.dev.yml down -v
-docker-compose -f docker-compose.dev.yml up --build
-```
+2.  **Initialize Admin User**:
+    You must run the initialization script to properly create the admin user with the correct password hash:
+    ```powershell
+    # PowerShell
+    .\scripts\init-admin.sh
+    ```
 
 ---
 
-## Hot Reload
+## 🔍 Service Ports
 
-The setup includes hot-reload support. Changes to `.tsx`, `.ts`, `.css` files will automatically refresh the browser.
+| Service | Port | URL |
+|---------|------|-----|
+| **Next.js App** | 9002 | http://localhost:9002 |
+| **Supabase API (Kong)** | 54321 | http://localhost:54321 |
+| **Supabase Auth (GoTrue)** | 9999 | http://localhost:9999 |
+| **Supabase REST (PostgREST)** | 54323 | http://localhost:54323 |
+| **PostgreSQL Database** | 54322 | localhost:54322 |
 
-**Excluded from hot-reload:**
-- `node_modules/` (uses container version)
-- `.next/` (uses container version)
+## ❓ Troubleshooting
 
----
-
-## Troubleshooting
-
-### Port Already in Use
+### Login Fails with "Invalid credentials"
+If the default `Admin@123*` password doesn't work, the admin user might have been created with an incorrect hash.
+**Fix:** Run the following command to reset the database and try again:
 ```powershell
-# Check what's using port 9002
+docker-compose -f docker-compose.prod.yml --env-file .env.docker down -v
+.\deploy.bat
+```
+
+### Port 9002 Already in Use
+If the app fails to start because port 9002 is busy:
+```powershell
+# Find the process ID
 netstat -ano | findstr :9002
-
 # Kill the process
-taskkill /PID <process_id> /F
+taskkill /PID <PID> /F
 ```
-
-### Container Won't Start
-```powershell
-# Clean up everything
-docker-compose -f docker-compose.dev.yml down -v
-docker system prune -f
-
-# Restart
-docker-compose -f docker-compose.dev.yml up --build
-```
-
-### Database Connection Failed
-Wait for the database to be healthy:
-```powershell
-docker-compose -f docker-compose.dev.yml logs supabase-db
-```
-
----
-
-## Alternative: Using Supabase CLI
-
-If you prefer using the Supabase CLI instead of the custom docker-compose:
-
-1. Install Supabase CLI:
-   ```powershell
-   npm install -g supabase
-   ```
-
-2. Start Supabase:
-   ```powershell
-   cd supabase
-   npx supabase start
-   ```
-
-3. Start the App only:
-   ```powershell
-   docker build -f Dockerfile.dev -t planpm-app .
-   docker run -p 9002:9002 -v ${PWD}:/app planpm-app
-   ```

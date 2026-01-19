@@ -1,10 +1,10 @@
 'use client';
 
-import { useUser } from '@/components/SupabaseProvider';
+import { useAuth } from '@/contexts/auth-context';
 import { Loader2 } from 'lucide-react';
 
 export function AppContent({ children }: { children: React.ReactNode }) {
-  const { isLoading } = useUser();
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (

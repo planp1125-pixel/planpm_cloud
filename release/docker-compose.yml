@@ -21,16 +21,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
-      args:
-        NEXT_PUBLIC_SUPABASE_URL: http://192.168.29.98:54321
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     container_name: planpm_app
     ports:
       - "9002:3000"
     environment:
       - NODE_ENV=production
       # Client-side URL (browser access via port mapping)
-      - NEXT_PUBLIC_SUPABASE_URL=http://192.168.29.98:54321
+      - NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       # Server-side URL (for API routes inside Docker network)
       - SUPABASE_URL=http://supabase-kong:8000
@@ -85,8 +82,8 @@ services:
       API_EXTERNAL_URL: http://localhost:54321
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:postgres@supabase-db:5432/postgres?search_path=auth
-      GOTRUE_SITE_URL: http://192.168.29.98:9002
-      GOTRUE_URI_ALLOW_LIST: http://192.168.29.98:9002,http://localhost:9002
+      GOTRUE_SITE_URL: http://localhost:9002
+      GOTRUE_URI_ALLOW_LIST: http://localhost:9002,http://127.0.0.1:9002
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
       GOTRUE_JWT_EXP: 604800
@@ -130,7 +127,7 @@ services:
   # SUPABASE REST API (PostgREST)
   # ============================================
   supabase-rest:
-    image: postgrest/postgrest:v11.2.2
+    image: postgrest/postgrest:v12.0.2
     container_name: planpm_supabase_rest
     ports:
       - "54323:3000"
@@ -151,7 +148,7 @@ services:
   # SUPABASE STORAGE
   # ============================================
   supabase-storage:
-    image: supabase/storage-api:v1.11.13
+    image: supabase/storage-api:v0.46.4
     container_name: planpm_supabase_storage
     ports:
       - "54324:5000"
@@ -160,13 +157,13 @@ services:
       SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       POSTGREST_URL: http://supabase-rest:3000
       PGRST_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
-      DATABASE_URL: postgres://postgres:postgres@supabase-db:5432/postgres
+      DATABASE_URL: postgres://supabase_storage_admin:postgres@supabase-db:5432/postgres
+      FILE_SIZE_LIMIT: 52428800
       STORAGE_BACKEND: file
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       TENANT_ID: stub
       REGION: local
       GLOBAL_S3_BUCKET: stub
-      FILE_SIZE_LIMIT: 52428800
     volumes:
       - supabase_storage_data:/var/lib/storage
     depends_on:
@@ -176,62 +173,6 @@ services:
         condition: service_started
     networks:
       - planpm_network
-    restart: unless-stopped
-
-  # ============================================
-  # SUPABASE META (Required for Studio)
-  # ============================================
-  supabase-meta:
-    image: supabase/postgres-meta:v0.84.2
-    container_name: planpm_supabase_meta
-    environment:
-      PG_META_PORT: 8080
-      PG_META_DB_HOST: supabase-db
-      PG_META_DB_PORT: 5432
-      PG_META_DB_NAME: postgres
-      PG_META_DB_USER: postgres
-      PG_META_DB_PASSWORD: postgres
-      PG_META_DB_SSL_MODE: disable
-      # Fallback variables
-      POSTGRES_HOST: supabase-db
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    networks:
-      - planpm_network
-    depends_on:
-      supabase-db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # ============================================
-  # SUPABASE STUDIO (Dashboard)
-  # ============================================
-  supabase-studio:
-    image: supabase/studio:latest
-    container_name: planpm_supabase_studio
-    ports:
-      - "54325:3000"
-    environment:
-      STUDIO_PG_META_URL: http://supabase-meta:8080
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_HOST: supabase-db
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: postgres
-      SUPABASE_URL: http://supabase-kong:8000
-      SUPABASE_PUBLIC_URL: http://192.168.29.98:54321
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-      STORAGE_API_URL: http://supabase-storage:5000
-      AUTH_URL: http://supabase-auth:9999
-      DEFAULT_ORGANIZATION_NAME: PlanPM
-      DEFAULT_PROJECT_NAME: PlanPM Local
-    networks:
-      - planpm_network
-    depends_on:
-      supabase-meta:
-        condition: service_started
     restart: unless-stopped
 
 # ============================================

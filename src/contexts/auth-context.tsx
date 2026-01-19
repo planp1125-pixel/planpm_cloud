@@ -70,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .single();
 
         if (!error && data) {
+            console.log('[Auth] Fetched profile:', data);
             setIsAdmin(data.role === 'admin');
             setDisplayName(data.display_name || '');
             setPermissions(data.permissions || defaultPermissions);
@@ -88,113 +89,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let isMounted = true;
-        let retryCount = 0;
-        const maxRetries = 2;
 
-        // Get initial session with retry logic
-        const getSession = async () => {
-            console.log('[Auth] Starting session fetch...');
-            try {
-                console.log('[Auth] Calling supabase.auth.getSession()...');
-                const { data: { session }, error } = await supabase.auth.getSession();
-
-                if (error) {
-                    throw error;
-                }
-
-                if (!isMounted) return;
-
-                console.log('[Auth] Session received:', session ? 'User logged in' : 'No session');
-                setSession(session);
-                setUser(session?.user ?? null);
-
-                if (session?.user) {
-                    console.log('[Auth] Fetching user profile...');
-                    try {
-                        await fetchUserProfile(session.user.id);
-                        console.log('[Auth] Profile fetched successfully');
-                    } catch (profileErr) {
-                        console.warn('[Auth] Could not fetch user profile:', profileErr);
-                        // Set defaults but continue - don't block the app
-                        setIsAdmin(false);
-                        setPermissions(defaultPermissions);
-                    }
-                }
-            } catch (err) {
-                console.error('[Auth] Error getting session:', err);
-                // On error, retry a couple times
-                if (retryCount < maxRetries) {
-                    retryCount++;
-                    console.log(`[Auth] Retrying session fetch (${retryCount}/${maxRetries})...`);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    if (isMounted) {
-                        return getSession();
-                    }
-                }
-            } finally {
-                if (isMounted) {
-                    console.log('[Auth] Setting isLoading to false');
-                    setIsLoading(false);
-                }
-            }
-        };
-
-        getSession();
-
-        // Fallback timeout - ensure we never stay loading forever
-        const fallbackTimeout = setTimeout(() => {
+        // Fallback safety valve: if nothing happens in 4 seconds, stop loading
+        const safetyTimeout = setTimeout(() => {
             if (isMounted && isLoading) {
-                console.warn('[Auth] Fallback timeout triggered - forcing loading to false');
+                console.warn('[Auth] Safety timeout - forcing loading false');
                 setIsLoading(false);
             }
-        }, 10000);
+        }, 4000);
 
-        return () => {
-            isMounted = false;
-            clearTimeout(fallbackTimeout);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    useEffect(() => {
-        // Listen for auth changes
+        // Listen for auth changes - this fires immediately with current session (INITIAL_SESSION)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                console.log('[Auth] Auth state changed:', event);
+                if (!isMounted) return;
+                console.log(`[Auth] Auth event: ${event}`, session?.user?.email);
 
-                // Always update session and user state
+                // Always update basic state
                 setSession(session);
                 setUser(session?.user ?? null);
 
-                // Only fetch profile on sign-in, not on token refresh
-                if (event === 'SIGNED_IN' && session?.user) {
+                // Fetch profile if we have a user and (it's a new login OR initial load)
+                // We use a simple check: if we have a user but no profile data/permissions, fetch it.
+                if (session?.user) {
                     try {
-                        await fetchUserProfile(session.user.id);
+                        // Only fetch if we haven't already (or it's a new sign in)
+                        // But for simplicity/robustness on reload, we just fetch it.
+                        // It's fast and ensures fresh data.
+                        // Fetch profile with strict timeout to prevent hanging
+                        const fetchPromise = fetchUserProfile(session.user.id);
+                        const timeoutPromise = new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('Profile fetch timed out')), 2000)
+                        );
+
+                        await Promise.race([fetchPromise, timeoutPromise]);
                     } catch (err) {
-                        console.error('Failed to fetch profile on sign in:', err);
-                        // Set defaults but don't block
+                        console.error('[Auth] Failed to fetch profile (or timed out):', err);
+                        // Ensure we don't block
                         setIsAdmin(false);
                         setPermissions(defaultPermissions);
                     }
-                    router.push('/');
-                }
-
-                if (event === 'SIGNED_OUT') {
+                } else if (event === 'SIGNED_OUT') {
+                    // Clear profile state
                     setIsAdmin(false);
                     setPermissions(defaultPermissions);
                     setDisplayName('');
+                    setSession(null);
+                    setUser(null);
+                }
+
+                // Handle redirects
+                if (event === 'SIGNED_OUT') {
                     router.push('/login');
                 }
 
-                // Don't change loading state on TOKEN_REFRESHED or INITIAL_SESSION
-                // Only set loading false if we were waiting for auth
-                if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+                // Stop loading once we've processed the event
+                // This covers INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, etc.
+                if (isMounted) {
                     setIsLoading(false);
                 }
             }
         );
 
         return () => {
+            isMounted = false;
+            clearTimeout(safetyTimeout);
             subscription.unsubscribe();
         };
     }, [router]);

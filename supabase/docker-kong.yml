@@ -31,6 +31,9 @@ services:
             - Content-Type
             - apikey
             - X-Client-Info
+            - X-Supabase-Api-Version
+            - accept-profile
+            - content-profile
           credentials: true
           max_age: 3600
 
@@ -62,6 +65,9 @@ services:
             - Prefer
             - Range
             - X-Client-Info
+            - X-Supabase-Api-Version
+            - accept-profile
+            - content-profile
           credentials: true
           max_age: 3600
       - name: request-transformer

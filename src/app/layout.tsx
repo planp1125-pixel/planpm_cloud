@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { MainLayout } from '@/components/layout/main-layout';
 import { Toaster } from "@/components/ui/toaster";
-import { SupabaseProvider } from '@/components/SupabaseProvider';
 import { AppContent } from '@/components/layout/app-content';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/contexts/auth-context';
@@ -31,15 +30,13 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SupabaseProvider>
-            <AuthProvider>
-              <AppContent>
-                <MainLayout>
-                  {children}
-                </MainLayout>
-              </AppContent>
-            </AuthProvider>
-          </SupabaseProvider>
+          <AuthProvider>
+            <AppContent>
+              <MainLayout>
+                {children}
+              </MainLayout>
+            </AppContent>
+          </AuthProvider>
           <Toaster />
         </ThemeProvider>
       </body>

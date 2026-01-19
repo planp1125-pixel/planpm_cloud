@@ -59,7 +59,7 @@ export function MaintenanceSummary() {
       if (!user?.id) return;
 
       const [instrumentsRes, configurationsRes] = await Promise.all([
-        supabase.from('instruments').select('*').eq('userId', user.id).eq('isActive', true),
+        supabase.from('instruments').select('*'),
         supabase.from('maintenance_configurations').select('*').eq('user_id', user.id).eq('is_active', true)
       ]);
 

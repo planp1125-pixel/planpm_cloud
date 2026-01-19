@@ -6,7 +6,7 @@ import { format } from 'date-fns';
  */
 export const formatDate = (date: Date | string): string => {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return format(d, 'd MMM yyyy'); // e.g., "12 Dec 2025"
+  return format(d, 'yyyy-MM-dd'); // e.g., "2025-12-12"
 };
 
 /**

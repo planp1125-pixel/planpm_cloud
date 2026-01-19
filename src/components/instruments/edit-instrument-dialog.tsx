@@ -225,8 +225,8 @@ export function EditInstrumentDialog({ isOpen, onOpenChange, instrument, onSucce
       if (error) {
         console.error('Error updating instrument:', error);
         toast({
-          title: 'Error',
-          description: 'Failed to update instrument.',
+          title: 'Update Failed',
+          description: error.message || 'Failed to update instrument details.',
           variant: 'destructive',
         });
       } else {

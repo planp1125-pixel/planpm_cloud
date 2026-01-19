@@ -1,15 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Admin client for looking up user by username
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-);
+// Create admin client lazily to avoid build-time errors
+function getSupabaseAdmin() {
+    // Use SUPABASE_URL for server-side (Docker internal) or fallback to public URL
+    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !key) {
+        throw new Error('Missing Supabase environment variables');
+    }
+
+    return createClient(url, key, {
+        auth: { autoRefreshToken: false, persistSession: false }
+    });
+}
 
 // GET - Get user role by username (for login page role display)
 export async function GET(request: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
+
     const { searchParams } = new URL(request.url);
     const username = searchParams.get('username');
 
@@ -43,3 +53,4 @@ export async function GET(request: NextRequest) {
         displayName: profile?.display_name || username,
     });
 }
+

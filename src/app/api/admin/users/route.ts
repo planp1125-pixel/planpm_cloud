@@ -1,12 +1,26 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Admin client with service role for user management
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-);
+// Create admin client lazily to avoid build-time errors
+let supabaseAdminInstance: SupabaseClient | null = null;
+
+function getSupabaseAdmin(): SupabaseClient {
+    if (supabaseAdminInstance) return supabaseAdminInstance;
+
+    // Use SUPABASE_URL for server-side (Docker internal) or fallback to public URL
+    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !key) {
+        throw new Error('Missing Supabase environment variables');
+    }
+
+    supabaseAdminInstance = createClient(url, key, {
+        auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    return supabaseAdminInstance;
+}
 
 // Password validation
 function validatePassword(password: string): { valid: boolean; errors: string[] } {
@@ -23,6 +37,7 @@ function validatePassword(password: string): { valid: boolean; errors: string[] 
 async function isAdmin(authHeader: string | null): Promise<boolean> {
     if (!authHeader) return false;
     const token = authHeader.replace('Bearer ', '');
+    const supabaseAdmin = getSupabaseAdmin();
 
     const { data: { user } } = await supabaseAdmin.auth.getUser(token);
     if (!user) return false;
@@ -38,6 +53,7 @@ async function isAdmin(authHeader: string | null): Promise<boolean> {
 
 // GET - List all users (admin only)
 export async function GET(request: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get('authorization');
 
     if (!await isAdmin(authHeader)) {
@@ -73,6 +89,7 @@ export async function GET(request: NextRequest) {
 
 // POST - Create new user (admin only)
 export async function POST(request: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get('authorization');
 
     if (!await isAdmin(authHeader)) {
@@ -170,6 +187,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE - Remove user (admin only)
 export async function DELETE(request: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get('authorization');
 
     if (!await isAdmin(authHeader)) {
@@ -205,6 +223,7 @@ export async function DELETE(request: NextRequest) {
 
 // PATCH - Update user (admin only) - for password reset and profile updates
 export async function PATCH(request: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get('authorization');
 
     if (!await isAdmin(authHeader)) {

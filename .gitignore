@@ -44,3 +44,14 @@ next-env.d.ts
 firebase-debug.log
 firestore-debug.log
 client_secret_*.json
+
+# Docker release artifacts (large binary files)
+release/*.tar
+*.tar
+
+# Test files
+test_image.txt
+test-upload.js
+fix_images.sql
+scripts/test_image.txt
+scripts/login_test.json

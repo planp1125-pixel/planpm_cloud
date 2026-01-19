@@ -1,0 +1,122 @@
+# Kong API Gateway Configuration for Self-Hosted Supabase
+# This file defines the routing for all Supabase services
+
+_format_version: "2.1"
+_transform: true
+
+###
+### Consumers / Users
+###
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: ${ANON_KEY}
+  - username: service_role
+    keyauth_credentials:
+      - key: ${SERVICE_ROLE_KEY}
+
+###
+### Access Control List
+###
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+###
+### Plugins
+###
+plugins:
+  - name: cors
+    service: supabase
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - X-Auth-Token
+        - Authorization
+        - apikey
+        - Prefer
+        - X-Client-Info
+      exposed_headers:
+        - X-Supabase-Api-Version
+      credentials: true
+      max_age: 3600
+
+###
+### Services
+###
+services:
+  ## Main API Service
+  - name: supabase
+    url: http://rest:3000
+    routes:
+      - name: rest-v1
+        strip_path: true
+        paths:
+          - /rest/v1/
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+              hide_credentials: false
+
+  ## Auth Service
+  - name: auth-v1
+    url: http://auth:9999
+    routes:
+      - name: auth-v1-route
+        strip_path: true
+        paths:
+          - /auth/v1/
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+              hide_credentials: false
+
+  ## Storage Service
+  - name: storage-v1
+    url: http://storage:5000
+    routes:
+      - name: storage-v1-route
+        strip_path: true
+        paths:
+          - /storage/v1/
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+              hide_credentials: false
+
+  ## Realtime Service (WebSocket)
+  - name: realtime-v1
+    url: http://realtime:4000
+    routes:
+      - name: realtime-v1-route
+        strip_path: true
+        paths:
+          - /realtime/v1/
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+              hide_credentials: false

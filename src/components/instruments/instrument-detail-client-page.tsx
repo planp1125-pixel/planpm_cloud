@@ -429,7 +429,7 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
 
         } catch (error) {
             console.error(error);
-            toast({ variant: "destructive", title: "Error", description: "Failed to update instrument." });
+            toast({ variant: "destructive", title: "Update Failed", description: (error as Error).message || "Failed to update instrument." });
         } finally {
             setIsSaving(false);
         }
