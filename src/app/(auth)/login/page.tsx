@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,8 @@ import planpmLogo from '../../../../icons/planpm.png';
 import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
-    const { signInWithEmail, isLoading: authLoading } = useAuth();
+    const { signInWithEmail, isLoading: authLoading, session } = useAuth();
+    const router = useRouter();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +23,13 @@ export default function LoginPage() {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [isLookingUpRole, setIsLookingUpRole] = useState(false);
     const { toast } = useToast();
+
+    // Redirect if already logged in
+    useEffect(() => {
+        if (!authLoading && session) {
+            router.push('/');
+        }
+    }, [authLoading, session, router]);
 
     // Lookup user role when username changes
     useEffect(() => {

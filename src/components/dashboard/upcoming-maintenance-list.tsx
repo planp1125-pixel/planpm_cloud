@@ -14,6 +14,7 @@ import type { MaintenanceEvent, Instrument, MaintenanceConfiguration, Maintenanc
 import { Skeleton } from '../ui/skeleton';
 import { MobileMaintenanceCard } from './mobile-maintenance-card';
 import { ColumnFilterPopover } from './column-filter-popover';
+import { MaintenanceTypeCards } from './maintenance-type-cards';
 import { UpdateMaintenanceDialog } from '../maintenance/update-maintenance-dialog';
 import { ViewMaintenanceResultDialog } from '../maintenance/view-maintenance-result-dialog';
 import { CheckCircle, Clock, AlertCircle, CircleDot, Search, ArrowUpDown, ArrowUp, ArrowDown, Info } from 'lucide-react';
@@ -96,6 +97,7 @@ export function UpcomingMaintenanceList() {
   const [frequencyFilter, setFrequencyFilter] = useState<FrequencyFilter>('all');
   const [sortField, setSortField] = useState<SortField>('dueDate');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [selectedType, setSelectedType] = useState<string | undefined>(undefined);
 
   // Excel-like column filters
   const [columnFilters, setColumnFilters] = useState<{
@@ -398,6 +400,11 @@ export function UpcomingMaintenanceList() {
       });
     }
 
+    // Type card filter
+    if (selectedType) {
+      data = data.filter(schedule => schedule.type === selectedType);
+    }
+
     // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -450,7 +457,7 @@ export function UpcomingMaintenanceList() {
     });
 
     return data;
-  }, [upcomingSchedules, instrumentsMap, searchTerm, sortField, sortOrder, statusFilter, frequencyFilter, columnFilters]);
+  }, [upcomingSchedules, instrumentsMap, searchTerm, sortField, sortOrder, statusFilter, frequencyFilter, selectedType, columnFilters]);
 
   // Get all unique values for column filters
   const getColumnValues = (column: keyof typeof columnFilters): string[] => {
@@ -500,6 +507,24 @@ export function UpcomingMaintenanceList() {
 
   return (
     <>
+      {/* Maintenance Type Cards - shows counts, click to filter */}
+      {upcomingSchedules.length > 0 && (
+        <div className="mb-4">
+          <MaintenanceTypeCards
+            schedules={upcomingSchedules}
+            onTypeClick={(type) => setSelectedType(selectedType === type ? undefined : type)}
+            selectedType={selectedType}
+          />
+          {selectedType && (
+            <div className="mt-2 text-sm text-muted-foreground text-center">
+              Filtering by: <span className="font-medium text-primary">{selectedType}</span>
+              <Button variant="link" size="sm" className="ml-2" onClick={() => setSelectedType(undefined)}>
+                Clear filter
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
       <Card className="transition-all hover:shadow-md">
         <CardHeader className="sticky top-0 z-30 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

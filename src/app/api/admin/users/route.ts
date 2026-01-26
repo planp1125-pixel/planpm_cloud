@@ -33,22 +33,26 @@ function validatePassword(password: string): { valid: boolean; errors: string[] 
     return { valid: errors.length === 0, errors };
 }
 
-// Check if requester is admin
-async function isAdmin(authHeader: string | null): Promise<boolean> {
-    if (!authHeader) return false;
+// Check if requester is admin and get their org_id
+async function getAdminAuth(authHeader: string | null): Promise<{ isAdmin: boolean; orgId: string | null; userId: string | null }> {
+    if (!authHeader) return { isAdmin: false, orgId: null, userId: null };
     const token = authHeader.replace('Bearer ', '');
     const supabaseAdmin = getSupabaseAdmin();
 
     const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    if (!user) return false;
+    if (!user) return { isAdmin: false, orgId: null, userId: null };
 
     const { data: profile } = await supabaseAdmin
         .from('profiles')
-        .select('role')
+        .select('role, org_id')
         .eq('id', user.id)
         .single();
 
-    return profile?.role === 'admin';
+    return {
+        isAdmin: profile?.role === 'admin',
+        orgId: profile?.org_id || null,
+        userId: user.id
+    };
 }
 
 // GET - List all users (admin only)
@@ -56,7 +60,8 @@ export async function GET(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get('authorization');
 
-    if (!await isAdmin(authHeader)) {
+    const authResult = await getAdminAuth(authHeader);
+    if (!authResult.isAdmin) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -92,7 +97,8 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get('authorization');
 
-    if (!await isAdmin(authHeader)) {
+    const authResult = await getAdminAuth(authHeader);
+    if (!authResult.isAdmin) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -120,7 +126,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
         }
 
-        // Create user with metadata
+        // Create user with metadata - include org_id so they join admin's organization
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
             email,
             password,
@@ -128,11 +134,13 @@ export async function POST(request: NextRequest) {
             user_metadata: {
                 display_name: displayName || username,
                 password_reset_required: true,
+                org_id: authResult.orgId,  // Link to admin's organization
+                role: role || 'user',
                 permissions: permissions || {
                     dashboard: 'view',
                     maintenance_history: 'view',
-                    update_maintenance: 'hidden',
-                    instruments: 'hidden',
+                    update_maintenance: 'view',
+                    instruments: 'view',
                     design_templates: 'hidden',
                     settings: 'hidden',
                     user_management: 'hidden',
@@ -190,7 +198,8 @@ export async function DELETE(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get('authorization');
 
-    if (!await isAdmin(authHeader)) {
+    const authResult = await getAdminAuth(authHeader);
+    if (!authResult.isAdmin) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -226,7 +235,8 @@ export async function PATCH(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get('authorization');
 
-    if (!await isAdmin(authHeader)) {
+    const authResult = await getAdminAuth(authHeader);
+    if (!authResult.isAdmin) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

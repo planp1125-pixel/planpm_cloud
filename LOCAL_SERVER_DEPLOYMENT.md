@@ -372,3 +372,6 @@ After following this guide:
 - ✅ Accessible from any computer on your network
 - ✅ Data persists even after restart
 - ✅ Starts automatically on boot
+
+
+docker compose -f docker-compose.prod.yml --env-file .env.docker up -d --build

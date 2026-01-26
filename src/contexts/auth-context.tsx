@@ -23,6 +23,7 @@ interface AuthContextType {
     displayName: string;
     permissions: UserPermissions;
     passwordResetRequired: boolean;
+    orgId: string | null;
     hasPermission: (feature: keyof UserPermissions, level: 'view' | 'edit') => boolean;
     signInWithGoogle: () => Promise<void>;
     signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [displayName, setDisplayName] = useState('');
     const [permissions, setPermissions] = useState<UserPermissions>(defaultPermissions);
     const [passwordResetRequired, setPasswordResetRequired] = useState(false);
+    const [orgId, setOrgId] = useState<string | null>(null);
     const router = useRouter();
 
     // Check if user has permission for a feature at a given level (memoized to prevent re-renders)
@@ -65,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchUserProfile = async (userId: string) => {
         const { data, error } = await supabase
             .from('profiles')
-            .select('role, display_name, permissions, password_reset_required')
+            .select('role, display_name, permissions, password_reset_required, org_id')
             .eq('id', userId)
             .single();
 
@@ -75,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setDisplayName(data.display_name || '');
             setPermissions(data.permissions || defaultPermissions);
             setPasswordResetRequired(data.password_reset_required || false);
+            setOrgId(data.org_id || null);
 
             // Redirect to password reset if required
             if (data.password_reset_required && typeof window !== 'undefined' && !window.location.pathname.includes('/reset-password')) {
@@ -115,16 +118,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         // Only fetch if we haven't already (or it's a new sign in)
                         // But for simplicity/robustness on reload, we just fetch it.
                         // It's fast and ensures fresh data.
-                        // Fetch profile with strict timeout to prevent hanging
+                        // Fetch profile with generous timeout for initial connection
                         const fetchPromise = fetchUserProfile(session.user.id);
                         const timeoutPromise = new Promise((_, reject) =>
-                            setTimeout(() => reject(new Error('Profile fetch timed out')), 2000)
+                            setTimeout(() => reject(new Error('Profile fetch timed out')), 8000)
                         );
 
                         await Promise.race([fetchPromise, timeoutPromise]);
                     } catch (err) {
-                        console.error('[Auth] Failed to fetch profile (or timed out):', err);
-                        // Ensure we don't block
+                        console.warn('[Auth] Profile fetch failed or timed out, using defaults:', err);
+                        // Don't block - just use defaults
                         setIsAdmin(false);
                         setPermissions(defaultPermissions);
                     }
@@ -140,6 +143,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // Handle redirects
                 if (event === 'SIGNED_OUT') {
                     router.push('/login');
+                } else if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
+                    // Redirect to dashboard after successful login
+                    if (window.location.pathname === '/login' || window.location.pathname === '/') {
+                        router.push('/');
+                    }
                 }
 
                 // Stop loading once we've processed the event
@@ -211,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 displayName,
                 permissions,
                 passwordResetRequired,
+                orgId,
                 hasPermission,
                 signInWithGoogle,
                 signInWithEmail,
