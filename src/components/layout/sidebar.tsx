@@ -35,12 +35,17 @@ const menuItems: MenuItem[] = [
 export function AppSidebar() {
   const pathname = usePathname();
   const { open, toggleSidebar } = useSidebar();
-  const { hasPermission } = useAuth();
+  const { hasPermission, permissions, isAdmin } = useAuth();
+
+  // Debug: log permissions
+  console.log('[Sidebar] Permissions:', permissions, 'isAdmin:', isAdmin);
 
   // Filter menu items based on user permissions
   const visibleMenuItems = menuItems.filter(item => {
     if (!item.permission) return true;
-    return hasPermission(item.permission, 'view');
+    const hasAccess = hasPermission(item.permission, 'view');
+    console.log(`[Sidebar] ${item.label}: permission=${item.permission}, hasAccess=${hasAccess}`);
+    return hasAccess;
   });
 
   return (
