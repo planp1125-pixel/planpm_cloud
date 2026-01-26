@@ -1,14 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Create admin client lazily to avoid build-time errors
-function getSupabaseAdmin() {
+function getSupabaseAdmin(): SupabaseClient | null {
     // Use SUPABASE_URL for server-side (Docker internal) or fallback to public URL
     const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!url || !key) {
-        throw new Error('Missing Supabase environment variables');
+        console.warn('Missing Supabase environment variables');
+        return null;
     }
 
     return createClient(url, key, {
@@ -19,6 +20,10 @@ function getSupabaseAdmin() {
 // GET - Get user role by username (for login page role display)
 export async function GET(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
+
+    if (!supabaseAdmin) {
+        return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
 
     const { searchParams } = new URL(request.url);
     const username = searchParams.get('username');

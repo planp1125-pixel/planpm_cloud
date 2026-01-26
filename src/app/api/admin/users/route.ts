@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Create admin client lazily to avoid build-time errors
 let supabaseAdminInstance: SupabaseClient | null = null;
 
-function getSupabaseAdmin(): SupabaseClient {
+function getSupabaseAdmin(): SupabaseClient | null {
     if (supabaseAdminInstance) return supabaseAdminInstance;
 
     // Use SUPABASE_URL for server-side (Docker internal) or fallback to public URL
@@ -12,7 +12,8 @@ function getSupabaseAdmin(): SupabaseClient {
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!url || !key) {
-        throw new Error('Missing Supabase environment variables');
+        console.warn('Missing Supabase environment variables');
+        return null;
     }
 
     supabaseAdminInstance = createClient(url, key, {
@@ -36,8 +37,11 @@ function validatePassword(password: string): { valid: boolean; errors: string[] 
 // Check if requester is admin and get their org_id
 async function getAdminAuth(authHeader: string | null): Promise<{ isAdmin: boolean; orgId: string | null; userId: string | null }> {
     if (!authHeader) return { isAdmin: false, orgId: null, userId: null };
-    const token = authHeader.replace('Bearer ', '');
+
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) return { isAdmin: false, orgId: null, userId: null };
+
+    const token = authHeader.replace('Bearer ', '');
 
     const { data: { user } } = await supabaseAdmin.auth.getUser(token);
     if (!user) return { isAdmin: false, orgId: null, userId: null };
@@ -58,6 +62,10 @@ async function getAdminAuth(authHeader: string | null): Promise<{ isAdmin: boole
 // GET - List all users (admin only)
 export async function GET(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+        return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+
     const authHeader = request.headers.get('authorization');
 
     const authResult = await getAdminAuth(authHeader);
@@ -95,6 +103,10 @@ export async function GET(request: NextRequest) {
 // POST - Create new user (admin only)
 export async function POST(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+        return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+
     const authHeader = request.headers.get('authorization');
 
     const authResult = await getAdminAuth(authHeader);
@@ -196,6 +208,10 @@ export async function POST(request: NextRequest) {
 // DELETE - Remove user (admin only)
 export async function DELETE(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+        return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+
     const authHeader = request.headers.get('authorization');
 
     const authResult = await getAdminAuth(authHeader);
@@ -233,6 +249,10 @@ export async function DELETE(request: NextRequest) {
 // PATCH - Update user (admin only) - for password reset and profile updates
 export async function PATCH(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+        return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+
     const authHeader = request.headers.get('authorization');
 
     const authResult = await getAdminAuth(authHeader);
