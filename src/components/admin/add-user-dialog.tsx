@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { Loader2, Eye, EyeOff, RefreshCw, Mail, UserPlus, Info } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AddUserDialogProps {
     isOpen: boolean;
@@ -17,6 +19,7 @@ interface AddUserDialogProps {
 }
 
 type PermissionLevel = 'hidden' | 'view' | 'edit';
+type CreateMode = 'create' | 'invite';
 
 interface Permissions {
     dashboard: PermissionLevel;
@@ -54,9 +57,11 @@ export function AddUserDialog({ isOpen, onOpenChange, onSuccess }: AddUserDialog
 
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [mode, setMode] = useState<CreateMode>('invite');
 
     // Form state
     const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState<'admin' | 'supervisor' | 'user'>('user');
@@ -90,6 +95,11 @@ export function AddUserDialog({ isOpen, onOpenChange, onSuccess }: AddUserDialog
         return errs;
     };
 
+    const validateEmail = (emailStr: string): boolean => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(emailStr);
+    };
+
     const handleRoleChange = (newRole: 'admin' | 'supervisor' | 'user') => {
         setRole(newRole);
         if (newRole === 'admin') {
@@ -104,14 +114,20 @@ export function AddUserDialog({ isOpen, onOpenChange, onSuccess }: AddUserDialog
     };
 
     const handleSubmit = async () => {
-        // Validate
         const validationErrors: string[] = [];
-        if (!username.trim()) validationErrors.push('Username is required');
-        if (username.includes('@')) validationErrors.push('Username should not contain @');
-        if (!password) validationErrors.push('Password is required');
 
-        const pwdErrors = validatePassword(password);
-        validationErrors.push(...pwdErrors);
+        if (mode === 'invite') {
+            // Invite mode validation
+            if (!email.trim()) validationErrors.push('Email is required');
+            if (email.trim() && !validateEmail(email.trim())) validationErrors.push('Invalid email format');
+        } else {
+            // Create mode validation
+            if (!username.trim()) validationErrors.push('Username is required');
+            if (username.includes('@')) validationErrors.push('Username should not contain @');
+            if (!password) validationErrors.push('Password is required');
+            const pwdErrors = validatePassword(password);
+            validationErrors.push(...pwdErrors);
+        }
 
         if (validationErrors.length > 0) {
             setErrors(validationErrors);
@@ -122,25 +138,46 @@ export function AddUserDialog({ isOpen, onOpenChange, onSuccess }: AddUserDialog
         setErrors([]);
 
         try {
+            const payload = mode === 'invite'
+                ? {
+                    mode: 'invite',
+                    email: email.trim(),
+                    displayName: displayName.trim() || email.split('@')[0],
+                    role,
+                    permissions,
+                }
+                : {
+                    mode: 'create',
+                    username: username.trim(),
+                    displayName: displayName.trim() || username.trim(),
+                    password,
+                    role,
+                    permissions,
+                };
+
             const res = await fetch('/api/admin/users', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${session?.access_token}`,
                 },
-                body: JSON.stringify({
-                    username: username.trim(),
-                    displayName: displayName.trim() || username.trim(),
-                    password,
-                    role,
-                    permissions,
-                }),
+                body: JSON.stringify(payload),
             });
 
             const data = await res.json();
 
             if (res.ok) {
-                toast({ title: 'Success', description: `User "${username}" created successfully` });
+                if (mode === 'invite') {
+                    toast({
+                        title: 'Invite Sent!',
+                        description: `An invitation email has been sent to ${email}`,
+                    });
+                } else {
+                    toast({
+                        title: 'User Created',
+                        description: `User "${username}" created successfully. Share the password with them.`,
+                    });
+                }
                 onSuccess();
                 resetForm();
                 onOpenChange(false);
@@ -156,6 +193,7 @@ export function AddUserDialog({ isOpen, onOpenChange, onSuccess }: AddUserDialog
 
     const resetForm = () => {
         setUsername('');
+        setEmail('');
         setDisplayName('');
         setPassword('');
         setRole('user');
@@ -177,60 +215,113 @@ export function AddUserDialog({ isOpen, onOpenChange, onSuccess }: AddUserDialog
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetForm(); onOpenChange(open); }}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Create New User</DialogTitle>
-                    <DialogDescription>Add a new user and configure their permissions</DialogDescription>
+                    <DialogTitle>Add New User</DialogTitle>
+                    <DialogDescription>Add a new user to your organization</DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-6 py-4">
-                    {/* Basic Info */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="username">Username *</Label>
-                            <Input
-                                id="username"
-                                placeholder="john"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value.replace(/\s/g, '_'))}
-                            />
-                            <p className="text-xs text-muted-foreground">No spaces or @ symbol</p>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="displayName">Display Name</Label>
-                            <Input
-                                id="displayName"
-                                placeholder="John Doe"
-                                value={displayName}
-                                onChange={(e) => setDisplayName(e.target.value)}
-                            />
-                        </div>
-                    </div>
+                    {/* Mode Selection Tabs */}
+                    <Tabs value={mode} onValueChange={(v) => setMode(v as CreateMode)}>
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="invite" className="flex items-center gap-2">
+                                <Mail className="w-4 h-4" />
+                                Invite by Email
+                            </TabsTrigger>
+                            <TabsTrigger value="create" className="flex items-center gap-2">
+                                <UserPlus className="w-4 h-4" />
+                                Create with Password
+                            </TabsTrigger>
+                        </TabsList>
 
-                    {/* Password */}
-                    <div className="space-y-2">
-                        <Label htmlFor="password">Temporary Password *</Label>
-                        <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <Input
-                                    id="password"
-                                    type={showPassword ? 'text' : 'password'}
-                                    placeholder="Min 8 chars, upper, lower, number, special"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
-                                <button
-                                    type="button"
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
+                        <TabsContent value="invite" className="space-y-4 mt-4">
+                            <Alert>
+                                <Info className="h-4 w-4" />
+                                <AlertDescription>
+                                    User will receive an email invitation to set their own password.
+                                </AlertDescription>
+                            </Alert>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="email">Email Address *</Label>
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        placeholder="user@company.com"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="displayNameInvite">Display Name</Label>
+                                    <Input
+                                        id="displayNameInvite"
+                                        placeholder="John Doe"
+                                        value={displayName}
+                                        onChange={(e) => setDisplayName(e.target.value)}
+                                    />
+                                </div>
                             </div>
-                            <Button type="button" variant="outline" onClick={generatePassword}>
-                                <RefreshCw className="w-4 h-4 mr-2" />
-                                Generate
-                            </Button>
-                        </div>
-                    </div>
+                        </TabsContent>
+
+                        <TabsContent value="create" className="space-y-4 mt-4">
+                            <Alert>
+                                <Info className="h-4 w-4" />
+                                <AlertDescription>
+                                    Create a username and password. You'll need to share the password with the user.
+                                </AlertDescription>
+                            </Alert>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="username">Username *</Label>
+                                    <Input
+                                        id="username"
+                                        placeholder="john"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value.replace(/\s/g, '_'))}
+                                    />
+                                    <p className="text-xs text-muted-foreground">No spaces or @ symbol</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="displayNameCreate">Display Name</Label>
+                                    <Input
+                                        id="displayNameCreate"
+                                        placeholder="John Doe"
+                                        value={displayName}
+                                        onChange={(e) => setDisplayName(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Password */}
+                            <div className="space-y-2">
+                                <Label htmlFor="password">Temporary Password *</Label>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <Input
+                                            id="password"
+                                            type={showPassword ? 'text' : 'password'}
+                                            placeholder="Min 8 chars, upper, lower, number, special"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                        >
+                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                    <Button type="button" variant="outline" onClick={generatePassword}>
+                                        <RefreshCw className="w-4 h-4 mr-2" />
+                                        Generate
+                                    </Button>
+                                </div>
+                            </div>
+                        </TabsContent>
+                    </Tabs>
 
                     {/* Role */}
                     <div className="space-y-2">
@@ -288,7 +379,7 @@ export function AddUserDialog({ isOpen, onOpenChange, onSuccess }: AddUserDialog
                     </Button>
                     <Button onClick={handleSubmit} disabled={isLoading}>
                         {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                        Create User
+                        {mode === 'invite' ? 'Send Invite' : 'Create User'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

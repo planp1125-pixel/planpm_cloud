@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST - Create new user (admin only)
+// Supports two modes: 'create' (with password) and 'invite' (email invite)
 export async function POST(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
     if (!supabaseAdmin) {
@@ -116,91 +117,150 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const { username, displayName, password, role, permissions } = body;
+        const { mode = 'create', username, email, displayName, password, role, permissions } = body;
 
-        // Validate required fields
-        if (!username || !password) {
-            return NextResponse.json({ error: 'Username and password required' }, { status: 400 });
-        }
+        // Common permission defaults
+        const defaultPermissions = {
+            dashboard: 'view',
+            maintenance_history: 'view',
+            update_maintenance: 'hidden',
+            instruments: 'hidden',
+            design_templates: 'hidden',
+            settings: 'hidden',
+            user_management: 'hidden',
+        };
 
-        // Validate password strength
-        const passwordValidation = validatePassword(password);
-        if (!passwordValidation.valid) {
-            return NextResponse.json({ error: passwordValidation.errors.join(', ') }, { status: 400 });
-        }
+        // Get the site URL for invite redirect
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://planpm.vercel.app';
 
-        // Create internal email format
-        const email = `${username.toLowerCase().replace(/\s+/g, '_')}@planpm.local`;
-
-        // Check if user already exists
-        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-        if (existingUsers?.users.some(u => u.email === email)) {
-            return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
-        }
-
-        // Create user with metadata - include org_id so they join admin's organization
-        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true,
-            user_metadata: {
-                display_name: displayName || username,
-                password_reset_required: true,
-                org_id: authResult.orgId,  // Link to admin's organization
-                role: role || 'user',
-                permissions: permissions || {
-                    dashboard: 'view',
-                    maintenance_history: 'view',
-                    update_maintenance: 'view',
-                    instruments: 'view',
-                    design_templates: 'hidden',
-                    settings: 'hidden',
-                    user_management: 'hidden',
-                },
-            },
-        });
-
-        if (createError) {
-            return NextResponse.json({ error: createError.message }, { status: 500 });
-        }
-
-        // Update or insert profile with role and permissions
-        // Use upsert in case trigger hasn't created the profile yet
-        if (newUser?.user) {
-            // Small delay to allow trigger to create profile first
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            const profileData = {
-                id: newUser.user.id,
-                role: role || 'user',
-                display_name: displayName || username,
-                password_reset_required: true,
-                permissions: permissions || {
-                    dashboard: 'view',
-                    maintenance_history: 'view',
-                    update_maintenance: 'hidden',
-                    instruments: 'hidden',
-                    design_templates: 'hidden',
-                    settings: 'hidden',
-                    user_management: 'hidden',
-                },
-            };
-
-            await supabaseAdmin
-                .from('profiles')
-                .upsert(profileData, { onConflict: 'id' });
-        }
-
-        return NextResponse.json({
-            success: true,
-            user: {
-                id: newUser?.user?.id,
-                username,
-                displayName: displayName || username,
-                role: role || 'user',
+        if (mode === 'invite') {
+            // ============ INVITE MODE: Send email invite ============
+            if (!email) {
+                return NextResponse.json({ error: 'Email required for invite mode' }, { status: 400 });
             }
-        });
+
+            // Check if user already exists
+            const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+            if (existingUsers?.users.some(u => u.email === email)) {
+                return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
+            }
+
+            // Invite user by email - Supabase will send the invite email
+            const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+                data: {
+                    display_name: displayName || email.split('@')[0],
+                    org_id: authResult.orgId,
+                    role: role || 'user',
+                    permissions: permissions || defaultPermissions,
+                    invited_by: authResult.userId,
+                },
+                redirectTo: `${siteUrl}/auth/accept-invite`,
+            });
+
+            if (inviteError) {
+                console.error('[Invite] Error:', inviteError);
+                return NextResponse.json({ error: inviteError.message }, { status: 500 });
+            }
+
+            // Create profile immediately with pending status
+            if (inviteData?.user) {
+                const profileData = {
+                    id: inviteData.user.id,
+                    role: role || 'user',
+                    display_name: displayName || email.split('@')[0],
+                    password_reset_required: false,
+                    org_id: authResult.orgId,
+                    permissions: permissions || defaultPermissions,
+                };
+
+                await supabaseAdmin
+                    .from('profiles')
+                    .upsert(profileData, { onConflict: 'id' });
+            }
+
+            return NextResponse.json({
+                success: true,
+                mode: 'invite',
+                message: `Invite email sent to ${email}`,
+                user: {
+                    id: inviteData?.user?.id,
+                    email,
+                    displayName: displayName || email.split('@')[0],
+                    role: role || 'user',
+                    status: 'invited',
+                }
+            });
+
+        } else {
+            // ============ CREATE MODE: Create with password (for local/internal users) ============
+            if (!username || !password) {
+                return NextResponse.json({ error: 'Username and password required' }, { status: 400 });
+            }
+
+            // Validate password strength
+            const passwordValidation = validatePassword(password);
+            if (!passwordValidation.valid) {
+                return NextResponse.json({ error: passwordValidation.errors.join(', ') }, { status: 400 });
+            }
+
+            // Create internal email format
+            const internalEmail = `${username.toLowerCase().replace(/\s+/g, '_')}@planpm.local`;
+
+            // Check if user already exists
+            const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+            if (existingUsers?.users.some(u => u.email === internalEmail)) {
+                return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
+            }
+
+            // Create user with metadata
+            const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                email: internalEmail,
+                password,
+                email_confirm: true,
+                user_metadata: {
+                    display_name: displayName || username,
+                    password_reset_required: true,
+                    org_id: authResult.orgId,
+                    role: role || 'user',
+                    permissions: permissions || defaultPermissions,
+                },
+            });
+
+            if (createError) {
+                return NextResponse.json({ error: createError.message }, { status: 500 });
+            }
+
+            // Update or insert profile
+            if (newUser?.user) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const profileData = {
+                    id: newUser.user.id,
+                    role: role || 'user',
+                    display_name: displayName || username,
+                    password_reset_required: true,
+                    org_id: authResult.orgId,
+                    permissions: permissions || defaultPermissions,
+                };
+
+                await supabaseAdmin
+                    .from('profiles')
+                    .upsert(profileData, { onConflict: 'id' });
+            }
+
+            return NextResponse.json({
+                success: true,
+                mode: 'create',
+                user: {
+                    id: newUser?.user?.id,
+                    username,
+                    displayName: displayName || username,
+                    role: role || 'user',
+                }
+            });
+        }
     } catch (err: any) {
+        console.error('[Users API] Error:', err);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }
