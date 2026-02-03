@@ -64,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, [permissions]);
 
     // Fetch user profile including role, permissions, display name
+    // If profile doesn't exist, create it (fallback for when DB trigger doesn't fire)
     const fetchUserProfile = async (userId: string) => {
         const { data, error } = await supabase
             .from('profiles')
@@ -83,7 +84,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (data.password_reset_required && typeof window !== 'undefined' && !window.location.pathname.includes('/reset-password')) {
                 router.push('/reset-password');
             }
+        } else if (error?.code === 'PGRST116') {
+            // Profile doesn't exist - create one (fallback for when trigger doesn't fire)
+            console.log('[Auth] Profile not found, creating one...');
+
+            try {
+                // Get user email for display name
+                const { data: userData } = await supabase.auth.getUser();
+                const email = userData?.user?.email || '';
+                const displayNameFromEmail = email.split('@')[0] || 'User';
+
+                // First create organization
+                const { data: orgData, error: orgError } = await supabase
+                    .from('organizations')
+                    .insert({
+                        name: `${displayNameFromEmail}'s Organization`,
+                        created_by: userId,
+                    })
+                    .select('id')
+                    .single();
+
+                if (orgError) {
+                    console.error('[Auth] Error creating organization:', orgError);
+                    // Continue with null org_id - might work if RLS allows null
+                }
+
+                const newOrgId = orgData?.id || null;
+
+                // Create profile with admin permissions (first user is admin)
+                const adminPermissions = {
+                    dashboard: 'edit',
+                    maintenance_history: 'edit',
+                    update_maintenance: 'edit',
+                    instruments: 'edit',
+                    design_templates: 'edit',
+                    settings: 'edit',
+                    user_management: 'edit',
+                };
+
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .insert({
+                        id: userId,
+                        role: 'admin',
+                        org_id: newOrgId,
+                        display_name: displayNameFromEmail,
+                        is_super_admin: true,
+                        permissions: adminPermissions,
+                    });
+
+                if (profileError) {
+                    console.error('[Auth] Error creating profile:', profileError);
+                } else {
+                    console.log('[Auth] Created profile with org_id:', newOrgId);
+                    setIsAdmin(true);
+                    setDisplayName(displayNameFromEmail);
+                    setPermissions(adminPermissions as UserPermissions);
+                    setPasswordResetRequired(false);
+                    setOrgId(newOrgId);
+                }
+            } catch (createErr) {
+                console.error('[Auth] Error in profile creation fallback:', createErr);
+            }
         } else {
+            console.error('[Auth] Error fetching profile:', error);
             setIsAdmin(false);
             setPermissions(defaultPermissions);
             setPasswordResetRequired(false);
