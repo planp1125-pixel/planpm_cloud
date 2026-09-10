@@ -83,7 +83,7 @@ export function UpdateMaintenanceDialog({
     const [isCompleteResult, setIsCompleteResult] = useState<boolean>(false);
     const [instrumentInfo, setInstrumentInfo] = useState<{ eqpId: string; model: string; make: string } | null>(null);
     const { toast } = useToast();
-    const { user } = useAuth();
+    const { user, orgId } = useAuth();
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -334,6 +334,7 @@ export function UpdateMaintenanceDialog({
             // Save the current test data to the database as a partial result
             const resultData = {
                 user_id: user?.id,
+                org_id: orgId,
                 maintenanceScheduleId: maintenanceEvent.id,
                 instrumentId: instrumentId,
                 completedDate: form.getValues('completedDate').toISOString(),
@@ -381,6 +382,7 @@ export function UpdateMaintenanceDialog({
                         document_type: 'section',
                         section_id: section.id,
                         user_id: user?.id,
+                        org_id: orgId,
                     });
 
                 if (docInsertError) {
@@ -514,6 +516,7 @@ export function UpdateMaintenanceDialog({
             // Create or update maintenance result record with test data
             const resultData = {
                 user_id: user?.id,
+                org_id: orgId,
                 maintenanceScheduleId: maintenanceEvent.id,
                 instrumentId: instrumentId,
                 completedDate: values.completedDate.toISOString(),
@@ -550,12 +553,13 @@ export function UpdateMaintenanceDialog({
                     .insert({
                         instrument_id: instrumentId,
                         maintenance_schedule_id: maintenanceEvent.id,
-                        title: `${values.resultType} - Main Certificate/Report`,
-                        description: `Main document for ${maintenanceEvent.type} - ${maintenanceEvent.description}`,
+                        title: `${values.resultType} Document`,
+                        description: `Main document for ${values.resultType}`,
                         document_url: documentUrl,
                         document_type: 'main',
                         section_id: null,
                         user_id: user?.id,
+                        org_id: orgId,
                     });
 
                 if (mainDocError) {
