@@ -192,6 +192,7 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
         serialNumber: values.serialNumber,
         location: values.location,
         user_id: user?.id,
+        org_id: orgId, // <-- Added org_id
         // Legacy fields populated from first schedule
         maintenanceType: primarySchedule.maintenanceType,
         frequency: primarySchedule.frequency as MaintenanceFrequency,
@@ -225,6 +226,7 @@ export function AddInstrumentDialog({ isOpen, onOpenChange, onSuccess }: AddInst
         schedule_date: schedule.scheduleDate.toISOString(),
         template_id: schedule.templateId || null,
         user_id: user?.id,
+        org_id: orgId, // <-- Added org_id
         maintenanceBy: schedule.maintenanceBy,
         vendorName: schedule.maintenanceBy === 'vendor' ? schedule.vendorName || '' : null,
         vendorContact: schedule.maintenanceBy === 'vendor' ? schedule.vendorContact || '' : null,

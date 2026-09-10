@@ -165,6 +165,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         }, 4000);
 
+        // Verify session and clear stale/invalid refresh tokens gracefully
+        supabase.auth.getSession().then(({ error }) => {
+            if (!isMounted) return;
+            if (error && (
+                error.message.includes('Refresh Token Not Found') ||
+                error.message.includes('Invalid Refresh Token') ||
+                (error as any).status === 400
+            )) {
+                console.warn('[Auth] Stale refresh token detected, clearing local session.');
+                supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+                setSession(null);
+                setUser(null);
+                setIsAdmin(false);
+                setPermissions(defaultPermissions);
+                setIsLoading(false);
+            }
+        }).catch((err) => {
+            console.warn('[Auth] Initial session check error:', err);
+        });
+
         // Listen for auth changes - this fires immediately with current session (INITIAL_SESSION)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
@@ -270,9 +290,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const signOut = async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            console.error('Error signing out:', error);
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                if (error.message?.includes('Refresh Token Not Found') || error.message?.includes('Invalid Refresh Token')) {
+                    console.warn('[Auth] Stale refresh token on sign out:', error.message);
+                } else {
+                    console.error('[Auth] Error signing out:', error);
+                }
+                await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+            }
+        } catch (err) {
+            console.warn('[Auth] Sign out exception:', err);
+            await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        } finally {
+            setIsAdmin(false);
+            setPermissions(defaultPermissions);
+            setDisplayName('');
+            setSession(null);
+            setUser(null);
+            router.push('/login');
         }
     };
 
