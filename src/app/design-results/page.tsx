@@ -21,6 +21,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useAuth } from '@/contexts/auth-context';
 
 type FormRow = {
     id: string;
@@ -52,6 +53,7 @@ export default function DesignResultsPage() {
     const [isEditing, setIsEditing] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const { toast } = useToast();
+    const { user, orgId } = useAuth();
 
     const form = useForm<FormValues>({
         defaultValues: {
@@ -136,7 +138,9 @@ export default function DesignResultsPage() {
             const templateData = {
                 name: values.name,
                 description: values.description,
-                structure: values.sections
+                structure: values.sections,
+                user_id: user?.id,
+                org_id: orgId,
             };
 
             let error;
