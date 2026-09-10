@@ -61,9 +61,9 @@ export function AppSidebar() {
               <Image
                 src={planpmLogo}
                 alt="Plan PM logo"
-                width={90}
-                height={90}
-                className="object-contain"
+                width={40}
+                height={40}
+                className="object-contain rounded-md"
               />
               <span>Plan-PM</span>
             </Link>
