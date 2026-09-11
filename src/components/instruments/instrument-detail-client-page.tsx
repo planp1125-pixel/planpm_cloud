@@ -69,7 +69,7 @@ const formSchema = z.object({
     model: z.string().min(1, 'Model is required.'),
     serialNumber: z.string().min(1, 'Serial number is required.'),
     location: z.string().min(1, 'Location is required.'),
-    schedules: z.array(scheduleSchema).min(1, "At least one schedule is required"),
+    schedules: z.array(scheduleSchema),
     imageUrl: z.string().url().optional().or(z.literal('')),
     maintenanceBy: z.enum(['self', 'vendor']).default('self'),
     vendorName: z.string().optional(),
@@ -305,6 +305,11 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
             if (instError) throw instError;
 
             // Handle Schedules (Configurations)
+            const { data: allExistingConfigs } = await supabase
+                .from('maintenance_configurations')
+                .select('id, maintenance_type')
+                .eq('instrument_id', instrumentId);
+
             // 1. Get existing configs IDs to know what to keep/delete
             const keptConfigIds = values.schedules.map(s => s.id).filter(Boolean);
 
@@ -365,6 +370,17 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
                     if (updateError) {
                         console.error('Error updating schedule:', JSON.stringify(updateError), schedule);
                         throw updateError;
+                    }
+
+                    // If maintenance type changed, delete old pending schedules first
+                    const oldConfig = allExistingConfigs?.find(c => c.id === schedule.id);
+                    if (oldConfig && oldConfig.maintenance_type !== schedule.maintenanceType) {
+                        await supabase
+                            .from('maintenanceSchedules')
+                            .delete()
+                            .eq('instrumentId', instrumentId)
+                            .eq('type', oldConfig.maintenance_type)
+                            .neq('status', 'Completed');
                     }
 
                     // Delete pending schedules and regenerate with new frequency
