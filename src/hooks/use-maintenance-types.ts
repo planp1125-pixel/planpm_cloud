@@ -15,7 +15,7 @@ const initialTypes = [
 export function useMaintenanceTypes() {
     const [dbTypes, setDbTypes] = useState<{ id: string; name: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const { user } = useAuth();
+    const { user, orgId } = useAuth();
 
     useEffect(() => {
         const fetchTypes = async () => {
@@ -49,7 +49,7 @@ export function useMaintenanceTypes() {
         const typeExists = maintenanceTypes.some(t => t.value.toLowerCase() === typeName.toLowerCase());
         if (typeExists) return;
 
-        const { data, error } = await supabase.from('maintenanceTypes').insert({ name: typeName, user_id: user?.id }).select('id, name').single();
+        const { data, error } = await supabase.from('maintenanceTypes').insert({ name: typeName, user_id: user?.id, org_id: orgId }).select('id, name').single();
         if (error) {
             console.error('Error adding maintenance type:', error);
         } else {
