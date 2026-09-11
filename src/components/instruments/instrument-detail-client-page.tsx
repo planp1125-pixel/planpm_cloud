@@ -205,6 +205,7 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
                 vendorName: data.vendorName || '',
                 vendorContact: data.vendorContact || '',
             });
+            replace(schedules);
             if (data.imageUrl) setImagePreviewUrl(data.imageUrl);
         }
         setIsLoadingInstrument(false);
@@ -411,6 +412,7 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
                             maintenanceBy: schedule.maintenanceBy,
                             vendorName: schedule.maintenanceBy === 'vendor' ? schedule.vendorName || '' : null,
                             vendorContact: schedule.maintenanceBy === 'vendor' ? schedule.vendorContact || '' : null,
+                            org_id: orgId,
                         })
                         .select()
                         .single();
