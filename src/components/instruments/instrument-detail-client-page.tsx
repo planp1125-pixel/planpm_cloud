@@ -367,6 +367,7 @@ export function InstrumentDetailClientPage({ instrumentId }: { instrumentId: str
                         maintenanceBy: schedule.maintenanceBy,
                         vendorName: schedule.maintenanceBy === 'vendor' ? schedule.vendorName || '' : null,
                         vendorContact: schedule.maintenanceBy === 'vendor' ? schedule.vendorContact || '' : null,
+                        org_id: orgId,
                     }).eq('id', schedule.id);
                     if (updateError) {
                         console.error('Error updating schedule:', JSON.stringify(updateError), schedule);
